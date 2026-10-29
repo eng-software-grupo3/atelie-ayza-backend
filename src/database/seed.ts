@@ -35,7 +35,7 @@ async function main(): Promise<void> {
 
     // Admin (RF-02): e-mail vem de variável de ambiente, nunca do repositório
     const adminEmail = config.get<string>('ADMIN_EMAIL');
-    const adminGoogleId = config.get<string>('ADMIN_GOOGLE_ID') ?? 'seed-admin';
+    const adminGoogleId = 'seed-admin';
     if (adminEmail) {
       await ensure(
         ds.getRepository(Usuario),
