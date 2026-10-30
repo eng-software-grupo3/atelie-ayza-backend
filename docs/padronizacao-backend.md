@@ -63,11 +63,13 @@ Todas as FKs usam `onDelete: 'RESTRICT'`.
 ## 9. Regras de domínio já decididas
 
 - Tecido em **metros lineares do rolo** (`quantidade_m`, `preco_metro`); `metragem_media_m` do modelo na mesma unidade.
+- Adereço tem `tipo` como **string livre** (sem enum e sem tabela de categoria), digitado pela gestora. Normalizar com trim e minúsculas no back, para "Pedraria" e "pedraria" não virarem tipos diferentes.
 - Adereço aplicado: **uma linha em `adereco_peca` por unidade**, com coordenadas em **proporção da imagem (0 a 1)**. A quantidade é a contagem de linhas.
 - `num_pedido` é sequencial e único (o que a cliente cita no WhatsApp); o `id` é UUID.
 - Mudança de status grava uma linha em `historico_status`; mudança de estoque grava em `movimentacao_estoque` (exatamente um entre tecido e adereço).
 - `preco_final` e parcelas são nulos até o aceite (RF-06).
-- E-mail da admin vem de `ADMIN_EMAIL` (variável de ambiente), nunca no repositório.
+- E-mail da admin vem de `ADMIN_EMAIL` (variável de ambiente), nunca no repositório. O `npm run seed` cria a admin com esse e-mail.
+- Prazo de confecção é fixo (3 dias), vindo de `PRAZO_CONFECCAO_DIAS` (variável de ambiente). Frete e demais prazos são separados. A data mínima de entrega no RF-08 = hoje + `PRAZO_CONFECCAO_DIAS` + `prazo_frete_dias`, respeitando as datas bloqueadas na agenda.
 
 ## 10. Git
 

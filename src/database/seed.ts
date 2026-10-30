@@ -3,7 +3,6 @@ import { NestFactory } from '@nestjs/core';
 import { DataSource, DeepPartial, FindOptionsWhere, ObjectLiteral, Repository } from 'typeorm';
 import { AppModule } from '../app.module.js';
 import { Adereco } from '../catalogo/entities/adereco.entity.js';
-import { CategoriaAdereco } from '../catalogo/entities/categoria-adereco.entity.js';
 import { Modelo, TipoModelo } from '../catalogo/entities/modelo.entity.js';
 import { Tecido } from '../catalogo/entities/tecido.entity.js';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
@@ -46,11 +45,6 @@ async function main(): Promise<void> {
       console.warn('ADMIN_EMAIL não definido: admin não criada.');
     }
 
-    // Categorias provisórias até a gestora confirmar a lista real
-    const categorias: Record<string, CategoriaAdereco> = {};
-    for (const nome of ['Pedraria', 'Argola', 'Laço']) {
-      categorias[nome] = await ensure(ds.getRepository(CategoriaAdereco), { nome }, { nome, desabilitado: false });
-    }
 
     // Modelos fictícios (SVG de exemplo)
     const modelos: Array<[string, TipoModelo, number, number, string]> = [
@@ -94,7 +88,7 @@ async function main(): Promise<void> {
         { nome },
         {
           nome,
-          categoria: categorias[cat],
+          tipo: cat,
           foto: null,
           quantidade,
           preco,

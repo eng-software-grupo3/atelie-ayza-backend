@@ -1,6 +1,5 @@
-import { Check, Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { decimalTransformer } from '../../database/decimal.transformer.js';
-import { CategoriaAdereco } from './categoria-adereco.entity.js';
 
 @Entity('adereco')
 @Check('"quantidade" >= 0')
@@ -12,9 +11,9 @@ export class Adereco {
   @Column({ length: 100 })
   nome!: string;
 
-  @ManyToOne(() => CategoriaAdereco, { nullable: false, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'id_categoria' })
-  categoria!: CategoriaAdereco;
+  // tipo livre (ex.: pedraria, argola, laço), digitado pela gestora
+  @Column({ length: 60 })
+  tipo!: string;
 
   @Column({ type: 'text', nullable: true })
   foto!: string | null;
