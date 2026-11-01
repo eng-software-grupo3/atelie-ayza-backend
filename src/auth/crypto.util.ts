@@ -20,12 +20,12 @@ export function isValidState(
 ): boolean {
   if (!cookieState || state !== cookieState) return false;
   const [value, signature] = state.split('.');
-  if (!value || !signature || signature.length !== 64) return false;
-  const expected = createHmac('sha256', secret).update(value).digest('hex');
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (actualBuffer.length !== expectedBuffer.length) return false;
-  return timingSafeEqual(actualBuffer, expectedBuffer);
+  if (!value || !signature) return false;
+  const actual = Buffer.from(signature);
+  const expected = Buffer.from(
+    createHmac('sha256', secret).update(value).digest('hex'),
+  );
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export function encryptSecret(value: string, secret: string): string {

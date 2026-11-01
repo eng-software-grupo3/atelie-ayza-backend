@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,8 +11,9 @@ import { Usuario } from '../pessoas/entities/usuario.entity.js';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
-  type AccessTokenPayload,
-  type RefreshTokenPayload,
+  requireConfig,
+  type TokenPayload,
+  type TokenType,
 } from './auth.constants.js';
 import {
   decryptSecret,
@@ -34,8 +34,9 @@ export class AuthService {
   ) {}
 
   getAuthorizationUrl(): { url: string; state: string } {
-    this.encryptionKey();
-    const state = signState(this.stateSecret());
+    // Fail before the Google redirect when the callback could not store the token.
+    this.secret('TOKEN_ENCRYPTION_KEY');
+    const state = signState(this.secret('JWT_SECRET'));
     return { state, url: this.google.authorizationUrl(state) };
   }
 
@@ -44,34 +45,28 @@ export class AuthService {
     state: string,
     cookieState?: string,
   ): Promise<AuthSessionDto> {
-    this.encryptionKey();
-    if (!code || !isValidState(state, cookieState, this.stateSecret())) {
+    const encryptionKey = this.secret('TOKEN_ENCRYPTION_KEY');
+    if (!code || !isValidState(state, cookieState, this.secret('JWT_SECRET'))) {
       throw new UnauthorizedException(
         'Invalid OAuth state or authorization code',
       );
     }
 
     const { profile, refreshToken } = await this.google.exchange(code);
-    const user = await this.saveUser(profile, refreshToken);
-    return this.issueSession(user);
+    const user = await this.saveUser(
+      profile,
+      refreshToken ? encryptSecret(refreshToken, encryptionKey) : undefined,
+    );
+    return this.session(user);
   }
 
-  async refresh(refreshToken: string): Promise<AuthSessionDto> {
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    const payload = await this.verifyRefresh(refreshToken);
-    const user = await this.users.findOne({ where: { id: payload.sub } });
-    if (!user || user.tokenVersion !== payload.ver) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-    return {
-      accessToken: await this.signAccess(user),
-      refreshToken,
-      tokenType: 'Bearer',
-      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-      user: this.toAuthUser(user),
-    };
+  async refresh(refreshToken: string | undefined): Promise<AuthSessionDto> {
+    const user = await this.verify(refreshToken, 'refresh');
+    return this.session(user, refreshToken);
+  }
+
+  userFromAccessToken(token: string | undefined): Promise<Usuario> {
+    return this.verify(token, 'access');
   }
 
   async logout(userId: string): Promise<void> {
@@ -89,20 +84,18 @@ export class AuthService {
   }
 
   async getGoogleAccessToken(idGoogle: string): Promise<string> {
+    const encryptionKey = this.secret('TOKEN_ENCRYPTION_KEY');
     const user = await this.users
       .createQueryBuilder('usuario')
       .addSelect('usuario.googleRefreshToken')
       .where('usuario.id_google = :idGoogle', { idGoogle })
       .getOne();
-    if (!user?.googleRefreshToken) {
-      throw new UnauthorizedException('Google account has no refresh token');
-    }
 
     let refreshToken: string;
     try {
       refreshToken = decryptSecret(
-        user.googleRefreshToken,
-        this.encryptionKey(),
+        user?.googleRefreshToken ?? '',
+        encryptionKey,
       );
     } catch {
       throw new UnauthorizedException('Google account has no refresh token');
@@ -110,122 +103,87 @@ export class AuthService {
     return this.google.accessTokenFromRefresh(refreshToken);
   }
 
-  private async issueSession(user: Usuario): Promise<AuthSessionDto> {
+  private async session(
+    user: Usuario,
+    refreshToken?: string,
+  ): Promise<AuthSessionDto> {
     return {
-      accessToken: await this.signAccess(user),
-      refreshToken: await this.signRefresh(user),
+      accessToken: await this.sign(user, 'access'),
+      refreshToken: refreshToken ?? (await this.sign(user, 'refresh')),
       tokenType: 'Bearer',
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       user: this.toAuthUser(user),
     };
   }
 
-  private async signAccess(user: Usuario): Promise<string> {
-    const payload: AccessTokenPayload = {
-      sub: user.id,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      typ: 'access',
-      ver: user.tokenVersion,
-    };
-    return this.jwt.signAsync(payload, {
-      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-    });
-  }
-
-  private async signRefresh(user: Usuario): Promise<string> {
-    const payload: RefreshTokenPayload = {
-      sub: user.id,
-      typ: 'refresh',
-      ver: user.tokenVersion,
-    };
-    return this.jwt.signAsync(payload, {
-      expiresIn: REFRESH_TOKEN_TTL_SECONDS,
-    });
-  }
-
-  private async verifyRefresh(token: string): Promise<RefreshTokenPayload> {
-    try {
-      const payload = await this.jwt.verifyAsync<RefreshTokenPayload>(token);
-      if (
-        payload.typ !== 'refresh' ||
-        !payload.sub ||
-        typeof payload.ver !== 'number'
-      ) {
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-      return payload;
-    } catch (error) {
-      if (error instanceof UnauthorizedException) throw error;
-      throw new UnauthorizedException('Invalid refresh token');
+  private sign(user: Usuario, typ: TokenType): Promise<string> {
+    const payload: TokenPayload = { sub: user.id, typ, ver: user.tokenVersion };
+    if (typ === 'access') {
+      payload.email = user.email;
+      payload.isAdmin = user.isAdmin;
     }
+    return this.jwt.signAsync(payload, {
+      expiresIn:
+        typ === 'access' ? ACCESS_TOKEN_TTL_SECONDS : REFRESH_TOKEN_TTL_SECONDS,
+    });
+  }
+
+  private async verify(
+    token: string | undefined,
+    typ: TokenType,
+  ): Promise<Usuario> {
+    const payload = token
+      ? await this.jwt.verifyAsync<TokenPayload>(token).catch(() => null)
+      : null;
+    const user =
+      payload?.typ === typ && payload.sub
+        ? await this.users.findOne({ where: { id: payload.sub } })
+        : null;
+    if (!user || user.tokenVersion !== payload?.ver) {
+      throw new UnauthorizedException(`Invalid ${typ} token`);
+    }
+    return user;
   }
 
   private async saveUser(
     profile: GoogleProfile,
-    refreshToken?: string | null,
+    encryptedRefreshToken?: string,
   ): Promise<Usuario> {
     const email = profile.email.trim().toLowerCase();
-    const nome = (profile.name?.trim() || email.split('@')[0]).slice(0, 120);
     const values: Partial<Usuario> = {
       idGoogle: profile.sub,
-      nome,
+      nome: (profile.name?.trim() || email.split('@')[0]).slice(0, 120),
       email,
       fotoUrl: profile.picture ?? null,
-      isAdmin: this.isAdminEmail(email),
+      isAdmin:
+        email === this.config.get<string>('ADMIN_EMAIL')?.trim().toLowerCase(),
     };
-    if (refreshToken) {
-      values.googleRefreshToken = encryptSecret(
-        refreshToken,
-        this.encryptionKey(),
-      );
-    }
+    if (encryptedRefreshToken)
+      values.googleRefreshToken = encryptedRefreshToken;
 
-    let user = await this.users.findOne({ where: { idGoogle: profile.sub } });
-    if (!user) user = await this.findByEmail(email);
+    const existing =
+      (await this.users.findOne({ where: { idGoogle: profile.sub } })) ??
+      (await this.users
+        .createQueryBuilder('usuario')
+        .where('LOWER(usuario.email) = :email', { email })
+        .getOne());
 
     try {
-      if (user) {
-        await this.users.update(user.id, values);
-        return await this.users.findOneByOrFail({ id: user.id });
+      if (!existing) {
+        return await this.users.save(
+          this.users.create({ ...values, tokenVersion: 0 }),
+        );
       }
-      return await this.users.save(
-        this.users.create({ ...values, tokenVersion: 0 }),
-      );
+      await this.users.update(existing.id, values);
+      return await this.users.findOneByOrFail({ id: existing.id });
     } catch (error) {
-      if (error instanceof BadRequestException) throw error;
       throw new BadRequestException('Could not save Google user', {
         cause: error,
       });
     }
   }
 
-  private async findByEmail(email: string): Promise<Usuario | null> {
-    return this.users
-      .createQueryBuilder('usuario')
-      .where('LOWER(usuario.email) = :email', { email })
-      .getOne();
-  }
-
-  private isAdminEmail(email: string): boolean {
-    const adminEmail = this.config
-      .get<string>('ADMIN_EMAIL')
-      ?.trim()
-      .toLowerCase();
-    return Boolean(adminEmail && email === adminEmail);
-  }
-
-  private stateSecret(): string {
-    return this.required('JWT_SECRET');
-  }
-
-  private encryptionKey(): string {
-    return this.required('TOKEN_ENCRYPTION_KEY');
-  }
-
-  private required(key: string): string {
-    const value = this.config.get<string>(key)?.trim();
-    if (!value) throw new ServiceUnavailableException(`Missing ${key}`);
-    return value;
+  private secret(key: string): string {
+    return requireConfig(this.config, key);
   }
 }

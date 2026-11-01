@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   HttpCode,
-  HttpException,
   HttpStatus,
   Post,
   Query,
@@ -25,17 +24,17 @@ import {
 import type { Request, Response } from 'express';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
 import {
+  DEFAULT_CALLBACK_URL,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_MAX_AGE_SECONDS,
 } from './auth.constants.js';
+import { CurrentUser, JwtAuthGuard } from './auth.guards.js';
 import { AuthService } from './auth.service.js';
-import { CurrentUser } from './current-user.decorator.js';
 import {
   AuthSessionDto,
   AuthUserDto,
   RefreshSessionDto,
 } from './dto/auth.dto.js';
-import { JwtAuthGuard } from './jwt-auth.guard.js';
 
 const LOGIN_STEPS =
   'Start sign-in with a full-page navigation to this URL, not fetch. ' +
@@ -45,6 +44,10 @@ const LOGIN_STEPS =
   'The success hash is access_token, refresh_token, token_type, and expires_in. ' +
   'The failure hash is error (access_denied, auth_failed, or server_error) and error_description. ' +
   'JSON responses use camelCase. The hash uses snake_case so the SPA can parse it with URLSearchParams.';
+
+const TOKEN_REJECTED = {
+  description: 'Missing, expired, or revoked access token',
+};
 
 @ApiTags('auth')
 @Controller('auth')
@@ -59,10 +62,7 @@ export class AuthController {
   @ApiFoundResponse({ description: 'Redirect to Google' })
   start(@Res() response: Response): void {
     const { url, state } = this.authService.getAuthorizationUrl();
-    response.setHeader(
-      'Set-Cookie',
-      this.stateCookie(state, OAUTH_STATE_MAX_AGE_SECONDS),
-    );
+    this.setStateCookie(response, state, OAUTH_STATE_MAX_AGE_SECONDS);
     response.redirect(url);
   }
 
@@ -84,7 +84,9 @@ export class AuthController {
     @Req() request: Request,
     @Res() response: Response,
   ): Promise<void> {
+    this.setStateCookie(response, '', 0);
     const frontend = this.frontendCallback();
+    let hash: Record<string, string>;
     try {
       if (oauthError) {
         throw new UnauthorizedException(
@@ -98,16 +100,33 @@ export class AuthController {
         state,
         readCookie(request.headers.cookie, OAUTH_STATE_COOKIE),
       );
-      this.clearStateCookie(response);
-      this.sendSession(response, frontend, session);
+      if (!frontend) {
+        response.json(session);
+        return;
+      }
+      hash = {
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
+        token_type: session.tokenType,
+        expires_in: String(session.expiresIn),
+      };
     } catch (error) {
-      this.clearStateCookie(response);
-      if (!frontend || response.headersSent) throw error;
-      const failure = callbackFailure(error);
-      response.redirect(
-        `${frontend}#${new URLSearchParams(failure).toString()}`,
-      );
+      if (!frontend) throw error;
+      hash =
+        error instanceof UnauthorizedException
+          ? {
+              error:
+                oauthError === 'access_denied'
+                  ? 'access_denied'
+                  : 'auth_failed',
+              error_description: error.message,
+            }
+          : {
+              error: 'server_error',
+              error_description: 'Google sign-in failed',
+            };
     }
+    response.redirect(`${frontend}#${new URLSearchParams(hash).toString()}`);
   }
 
   @Get('me')
@@ -115,9 +134,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Current user' })
   @ApiOkResponse({ type: AuthUserDto })
-  @ApiUnauthorizedResponse({
-    description: 'Missing, expired, or revoked access token',
-  })
+  @ApiUnauthorizedResponse(TOKEN_REJECTED)
   me(@CurrentUser() user: Usuario): AuthUserDto {
     return this.authService.toAuthUser(user);
   }
@@ -141,63 +158,34 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke the current session' })
   @ApiNoContentResponse()
-  @ApiUnauthorizedResponse({
-    description: 'Missing, expired, or revoked access token',
-  })
+  @ApiUnauthorizedResponse(TOKEN_REJECTED)
   logout(@CurrentUser() user: Usuario): Promise<void> {
     return this.authService.logout(user.id);
-  }
-
-  private sendSession(
-    response: Response,
-    frontend: string | undefined,
-    session: AuthSessionDto,
-  ): void {
-    if (!frontend) {
-      response.json(session);
-      return;
-    }
-    const hash = new URLSearchParams({
-      access_token: session.accessToken,
-      refresh_token: session.refreshToken,
-      token_type: session.tokenType,
-      expires_in: String(session.expiresIn),
-    });
-    response.redirect(`${frontend}#${hash.toString()}`);
   }
 
   private frontendCallback(): string | undefined {
     const origin = this.config
       .get<string>('FRONTEND_URL')
       ?.split(',')[0]
-      ?.trim();
-    if (!origin) return undefined;
-    return `${origin.replace(/\/$/, '')}/auth/callback`;
+      .trim()
+      .replace(/\/$/, '');
+    return origin ? `${origin}/auth/callback` : undefined;
   }
 
-  private clearStateCookie(response: Response): void {
-    response.setHeader('Set-Cookie', this.stateCookie('', 0));
-  }
-
-  private stateCookie(value: string, maxAge: number): string {
-    const parts = [
-      `${OAUTH_STATE_COOKIE}=${value}`,
-      `Max-Age=${maxAge}`,
-      'HttpOnly',
-      'SameSite=Lax',
-      'Path=/auth/google',
-    ];
-    if (this.secureCookie()) parts.push('Secure');
-    return parts.join('; ');
-  }
-
-  private secureCookie(): boolean {
-    return this.config
-      .get<string>(
-        'GOOGLE_CALLBACK_URL',
-        'http://localhost:3000/auth/google/callback',
-      )
-      .startsWith('https://');
+  private setStateCookie(
+    response: Response,
+    value: string,
+    maxAge: number,
+  ): void {
+    const secure = this.config
+      .get<string>('GOOGLE_CALLBACK_URL', DEFAULT_CALLBACK_URL)
+      .startsWith('https://')
+      ? '; Secure'
+      : '';
+    response.setHeader(
+      'Set-Cookie',
+      `${OAUTH_STATE_COOKIE}=${value}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax; Path=/auth/google${secure}`,
+    );
   }
 }
 
@@ -210,32 +198,4 @@ function readCookie(
     .map((cookie) => cookie.trim())
     .find((cookie) => cookie.startsWith(`${name}=`))
     ?.slice(name.length + 1);
-}
-
-function callbackFailure(error: unknown): {
-  error: string;
-  error_description: string;
-} {
-  if (error instanceof UnauthorizedException) {
-    const message = exceptionMessage(error);
-    if (message === 'Google sign-in was cancelled') {
-      return { error: 'access_denied', error_description: message };
-    }
-    return {
-      error: 'auth_failed',
-      error_description: message || 'Google sign-in failed',
-    };
-  }
-  return { error: 'server_error', error_description: 'Google sign-in failed' };
-}
-
-function exceptionMessage(error: HttpException): string {
-  const body = error.getResponse();
-  if (typeof body === 'string') return body;
-  if (typeof body === 'object' && body && 'message' in body) {
-    const message = (body as { message?: string | string[] }).message;
-    if (Array.isArray(message)) return message.join(', ');
-    if (typeof message === 'string') return message;
-  }
-  return error.message;
 }

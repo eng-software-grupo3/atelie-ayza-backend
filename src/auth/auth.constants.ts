@@ -1,18 +1,25 @@
+import { ServiceUnavailableException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const OAUTH_STATE_COOKIE = 'oauth_state';
 export const OAUTH_STATE_MAX_AGE_SECONDS = 600;
+export const DEFAULT_CALLBACK_URL =
+  'http://localhost:3000/auth/google/callback';
 
-export type AccessTokenPayload = {
+export type TokenType = 'access' | 'refresh';
+
+export type TokenPayload = {
   sub: string;
-  email: string | null;
-  isAdmin: boolean;
-  typ: 'access';
+  typ: TokenType;
   ver: number;
+  email?: string | null;
+  isAdmin?: boolean;
 };
 
-export type RefreshTokenPayload = {
-  sub: string;
-  typ: 'refresh';
-  ver: number;
-};
+export function requireConfig(config: ConfigService, key: string): string {
+  const value = config.get<string>(key)?.trim();
+  if (!value) throw new ServiceUnavailableException(`Missing ${key}`);
+  return value;
+}
