@@ -1,6 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { DataSource, DeepPartial, FindOptionsWhere, ObjectLiteral, Repository } from 'typeorm';
+import {
+  DataSource,
+  DeepPartial,
+  FindOptionsWhere,
+  ObjectLiteral,
+  Repository,
+} from 'typeorm';
 import { AppModule } from '../app.module.js';
 import { Adereco } from '../catalogo/entities/adereco.entity.js';
 import { Modelo, TipoModelo } from '../catalogo/entities/modelo.entity.js';
@@ -27,24 +33,42 @@ function svg(cor: string): string {
 }
 
 async function main(): Promise<void> {
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['error', 'warn'],
+  });
   try {
     const ds = app.get(DataSource);
     const config = app.get(ConfigService);
 
-    // Admin (RF-02): e-mail vem de variável de ambiente, nunca do repositório
-    const adminEmail = config.get<string>('ADMIN_EMAIL');
-    const adminGoogleId = 'seed-admin';
+    // Admin (RF-02): e-mail vem de variável de ambiente, nunca do repositório.
+    // update() não regrava google_refresh_token nem troca um id_google já vinculado.
+    const adminEmail = config.get<string>('ADMIN_EMAIL')?.trim().toLowerCase();
     if (adminEmail) {
-      await ensure(
-        ds.getRepository(Usuario),
-        { email: adminEmail },
-        { idGoogle: adminGoogleId, nome: 'Gestora (seed)', email: adminEmail, fotoUrl: null, isAdmin: true },
-      );
+      const usuarios = ds.getRepository(Usuario);
+      const existente = await usuarios
+        .createQueryBuilder('usuario')
+        .where('LOWER(usuario.email) = :email', { email: adminEmail })
+        .getOne();
+      if (!existente) {
+        await usuarios.save(
+          usuarios.create({
+            idGoogle: 'seed-admin',
+            nome: 'Gestora (seed)',
+            email: adminEmail,
+            fotoUrl: null,
+            isAdmin: true,
+            tokenVersion: 0,
+          }),
+        );
+      } else {
+        await usuarios.update(existente.id, {
+          email: adminEmail,
+          isAdmin: true,
+        });
+      }
     } else {
       console.warn('ADMIN_EMAIL não definido: admin não criada.');
     }
-
 
     // Modelos fictícios (SVG de exemplo)
     const modelos: Array<[string, TipoModelo, number, number, string]> = [
@@ -57,7 +81,15 @@ async function main(): Promise<void> {
       await ensure(
         ds.getRepository(Modelo),
         { nome },
-        { nome, tipo, preco, metragemMediaM, fotoSvg: svg(cor), desabilitado: false, excluido: false },
+        {
+          nome,
+          tipo,
+          preco,
+          metragemMediaM,
+          fotoSvg: svg(cor),
+          desabilitado: false,
+          excluido: false,
+        },
       );
     }
 
@@ -71,7 +103,16 @@ async function main(): Promise<void> {
       await ensure(
         ds.getRepository(Tecido),
         { nome },
-        { nome, foto: null, quantidadeM, precoMetro, estoqueMinimoM, larguraCm: 150, desabilitado: false, excluido: false },
+        {
+          nome,
+          foto: null,
+          quantidadeM,
+          precoMetro,
+          estoqueMinimoM,
+          larguraCm: 150,
+          desabilitado: false,
+          excluido: false,
+        },
       );
     }
 
