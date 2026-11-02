@@ -22,7 +22,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "db:start": "docker-compose up -d",
     "db:stop": "docker-compose down",
-    "seed": "nest build && node $(find dist -name seed.js | head -1)"
+    "seed": "nest build && node dist/database/seed.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
