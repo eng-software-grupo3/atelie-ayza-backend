@@ -9,6 +9,7 @@ import { PessoasModule } from './pessoas/pessoas.module.js';
 import { AgendaModule } from './agenda/agenda.module.js';
 import { PedidosModule } from './pedidos/pedidos.module.js';
 import { EstoqueModule } from './estoque/estoque.module.js';
+import { AuthModule } from './auth/auth.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { EstoqueModule } from './estoque/estoque.module.js';
     AgendaModule,
     PedidosModule,
     EstoqueModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

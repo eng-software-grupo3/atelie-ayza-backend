@@ -18,6 +18,17 @@ export class Usuario {
   @Column({ name: 'foto_url', type: 'text', nullable: true })
   fotoUrl!: string | null;
 
+  @Column({
+    name: 'google_refresh_token',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  googleRefreshToken!: string | null;
+
   @Column({ name: 'is_admin', default: false })
   isAdmin!: boolean;
+
+  @Column({ name: 'token_version', default: 0 })
+  tokenVersion!: number;
 }

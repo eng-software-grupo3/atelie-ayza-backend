@@ -22,15 +22,17 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "db:start": "docker-compose up -d",
     "db:stop": "docker-compose down",
-    "seed": "nest build && node $(find dist -name seed.js | head -1)"
+    "seed": "nest build && node dist/database/seed.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^12.0.1",
+    "@nestjs/jwt": "^12.0.3",
     "@nestjs/platform-express": "^12.0.1",
     "@nestjs/swagger": "^12.0.5",
     "@nestjs/typeorm": "^12.0.2",
+    "google-auth-library": "^11.3.2",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
