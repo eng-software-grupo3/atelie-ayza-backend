@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { configureTecidoStaticAssets } from './catalogo/tecido.static.js';
 
 function corsOrigin(): boolean | string[] {
   const origins = process.env.FRONTEND_URL?.split(',')
@@ -10,7 +12,8 @@ function corsOrigin(): boolean | string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  configureTecidoStaticAssets(app);
   app.enableCors({
     origin: corsOrigin(),
     credentials: true,
