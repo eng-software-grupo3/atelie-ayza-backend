@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { AppModule } from '../app.module.js';
 import { Adereco } from '../catalogo/entities/adereco.entity.js';
-import { Modelo, TipoModelo } from '../catalogo/entities/modelo.entity.js';
+import { Modelo, ParteModelo } from '../catalogo/entities/modelo.entity.js';
 import { Tecido } from '../catalogo/entities/tecido.entity.js';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
 
@@ -71,23 +71,24 @@ async function main(): Promise<void> {
     }
 
     // Modelos fictícios (SVG de exemplo)
-    const modelos: Array<[string, TipoModelo, number, number, string]> = [
-      ['Cortininha', TipoModelo.CIMA, 40, 0.4, '#e07a9b'],
-      ['Faixa', TipoModelo.CIMA, 45, 0.5, '#7aa7e0'],
-      ['Asa Larga', TipoModelo.BAIXO, 40, 0.4, '#e07a9b'],
-      ['Lateral Fina', TipoModelo.BAIXO, 45, 0.45, '#7aa7e0'],
+    const modelos: Array<[string, ParteModelo, number, number, string]> = [
+      ['Cortininha', ParteModelo.CIMA, 40, 0.4, '#e07a9b'],
+      ['Faixa', ParteModelo.CIMA, 45, 0.5, '#7aa7e0'],
+      ['Asa Larga', ParteModelo.BAIXO, 40, 0.4, '#e07a9b'],
+      ['Lateral Fina', ParteModelo.BAIXO, 45, 0.45, '#7aa7e0'],
     ];
-    for (const [nome, tipo, preco, metragemMediaM, cor] of modelos) {
+    for (const [nome, parte, valor, metragemMediaM, cor] of modelos) {
       await ensure(
         ds.getRepository(Modelo),
         { nome },
         {
           nome,
-          tipo,
-          preco,
+          parte,
+          valor,
           metragemMediaM,
-          fotoSvg: svg(cor),
-          desabilitado: false,
+          svgUrl: svg(cor),
+          atualizadoEm: new Date(),
+          habilitado: false,
           excluido: false,
         },
       );
