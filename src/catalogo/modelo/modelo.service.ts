@@ -7,8 +7,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Modelo, ParteModelo } from '../entities/modelo.entity.js';
-import { CreateModeloDto, PatchModeloDto } from './dto/modelo.dto.js';
-import { ModeloManagementDto,  ModeloPublicDto } from './dto/modelo.dto.js';
+import { CreateModeloDto, PatchModeloDto } from './modelo.dto.js';
+import { ModeloManagementDto,  ModeloPublicDto } from './modelo.dto.js';
 
 function amount(value: unknown, field: string): number {
   if (typeof value !== 'string' && typeof value !== 'number') {

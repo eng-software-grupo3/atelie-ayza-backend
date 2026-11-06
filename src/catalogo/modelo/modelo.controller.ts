@@ -32,7 +32,7 @@ import {
   ModeloPublicDto,
   PatchModeloDto,
   SetModeloHabilitadoDto,
-} from './dto/modelo.dto.js';
+} from './modelo.dto.js';
 
 @ApiTags('modelos')
 @Controller('api/gestao/modelos')

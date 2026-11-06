@@ -1,6 +1,6 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ParteModelo } from '../../entities/modelo.entity.js';
+import { ParteModelo } from '../entities/modelo.entity.js';
 
 export class CreateModeloDto {
   @ApiProperty({ maxLength: 100 })
