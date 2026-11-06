@@ -10,10 +10,10 @@ import { Tecido } from './entities/tecido.entity.js';
 import {
   ModeloController,
   ModelosPublicController,
-} from './modelo.controller.js';
+} from './modelo/modelo.controller.js';
 
 
-import { ModeloService } from './modelo.service.js';
+import { ModeloService } from './modelo/modelo.service.js';
 
 @Module({
   imports: [

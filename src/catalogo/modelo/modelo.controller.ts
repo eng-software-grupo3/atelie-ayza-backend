@@ -22,7 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { JwtAuthGuard, AdminGuard } from '../auth/auth.guards.js';
+import { JwtAuthGuard, AdminGuard } from '../../auth/auth.guards.js';
 
 import { ModeloService } from './modelo.service.js';
 
@@ -36,7 +36,7 @@ import {
 
 @ApiTags('modelos')
 @Controller('api/gestao/modelos')
-//@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
 @ApiProduces('application/json')
 @ApiResponse({ status: 401, description: 'Não autenticado' })
