@@ -58,7 +58,7 @@ export class TecidoService {
   async create(data: Record<string, unknown>, file?: TecidoUpload) {
     this.validateName(data.nome);
     const precoMetro = amount(data.preco_metro, 'preco_metro');
-    const quantidadeM = amount(data.quantidade_m, 'quantidade_m');
+    const quantidadeM = amount(data.quantidade, 'quantidade');
     if (!file) throw new BadRequestException('foto obrigatória');
     const foto = await this.savePhoto(file);
     try {
@@ -83,6 +83,19 @@ export class TecidoService {
     }
   }
 
+  async updateQuantity(id: string, data: Record<string, unknown>) {
+    const tecido = await this.find(id);
+    tecido.quantidadeM = amount(data.quantidade, 'quantidade');
+    return this.project(await this.repo.save(tecido), true);
+  }
+
+  async updateDisabled(id: string, data: Record<string, unknown>) {
+    const tecido = await this.find(id);
+    if (typeof data.desabilitado !== 'boolean') throw new BadRequestException('desabilitado inválido');
+    tecido.desabilitado = data.desabilitado;
+    return this.project(await this.repo.save(tecido), true);
+  }
+
   async remove(id: string): Promise<void> {
     const tecido = await this.find(id);
     tecido.excluido = true;
@@ -99,6 +112,6 @@ export class TecidoService {
   }
   private project(tecido: Tecido, admin: boolean) {
     const common = { id: tecido.id, nome: tecido.nome, foto: tecido.foto, preco_metro: tecido.precoMetro };
-    return admin ? { ...common, quantidade_m: tecido.quantidadeM, desabilitado: tecido.desabilitado } : common;
+    return admin ? { ...common, quantidade: tecido.quantidadeM, desabilitado: tecido.desabilitado } : common;
   }
 }
