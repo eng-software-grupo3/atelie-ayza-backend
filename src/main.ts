@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { configureAderecoStaticAssets } from './catalogo/adereco.static.js';
 import { configureTecidoStaticAssets } from './catalogo/tecido.static.js';
 
 function corsOrigin(): boolean | string[] {
@@ -13,6 +14,7 @@ function corsOrigin(): boolean | string[] {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  configureAderecoStaticAssets(app);
   configureTecidoStaticAssets(app);
   app.enableCors({
     origin: corsOrigin(),
