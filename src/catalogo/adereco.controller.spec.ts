@@ -11,7 +11,7 @@ import { AderecoService } from './adereco.service.js';
 describe('adereco HTTP API', () => {
   let app: any;
   const row = { id: '7bcb11e2-2fa4-4fd0-a2df-c6f5ecb7b97d', nome: 'Laço', foto: '/x.png', preco: 5, quantidade: 2, desabilitado: false };
-  const service = { list: vi.fn(async (admin = true) => admin ? [row] : [{ id: row.id, nome: row.nome, foto: row.foto, preco: row.preco }]), get: vi.fn(async () => row), create: vi.fn(async () => row), update: vi.fn(async () => row), remove: vi.fn(async () => undefined) };
+  const service = { list: vi.fn(async (admin = true) => admin ? [row] : [{ id: row.id, nome: row.nome, foto: row.foto, preco: row.preco }]), get: vi.fn(async () => row), create: vi.fn(async () => row), update: vi.fn(async () => row), updateQuantity: vi.fn(async () => row), updateDisabled: vi.fn(async () => row), remove: vi.fn(async () => undefined) };
   beforeEach(async () => {
     vi.clearAllMocks();
     const module = await Test.createTestingModule({ controllers: [AderecoController, AderecosPublicController], providers: [
@@ -28,6 +28,8 @@ describe('adereco HTTP API', () => {
     await request(app.getHttpServer()).get(`/api/gestao/aderecos/${row.id}`).set('Authorization', 'Bearer admin').expect(200);
     await request(app.getHttpServer()).post('/api/gestao/aderecos').set('Authorization', 'Bearer admin').field('nome', 'Laço').field('preco', '5').field('quantidade', '2').attach('foto', Buffer.from('x'), 'x.png').expect(201);
     await request(app.getHttpServer()).patch(`/api/gestao/aderecos/${row.id}`).set('Authorization', 'Bearer admin').field('nome', 'Novo').expect(200);
+    await request(app.getHttpServer()).patch(`/api/gestao/aderecos/${row.id}/quantidade`).set('Authorization', 'Bearer admin').send({ quantidade: 3 }).expect(200);
+    await request(app.getHttpServer()).patch(`/api/gestao/aderecos/${row.id}/desabilitado`).set('Authorization', 'Bearer admin').send({ desabilitado: true }).expect(200);
     await request(app.getHttpServer()).delete(`/api/gestao/aderecos/${row.id}`).set('Authorization', 'Bearer admin').expect(204);
   });
   it('leaves public route unguarded and projects only public fields', async () => {
@@ -63,8 +65,12 @@ describe('adereco HTTP API', () => {
     expect(Object.keys(schemas.PatchAderecoMultipartDto.properties)).toEqual(['nome', 'foto', 'preco']);
     expect(Object.keys(schemas.AderecoManagementDto.properties)).toEqual(['id', 'nome', 'foto', 'preco', 'quantidade', 'desabilitado']);
     expect(Object.keys(schemas.AderecoPublicDto.properties)).toEqual(['id', 'nome', 'foto', 'preco']);
+    expect(schemas.UpdateAderecoQuantidadeDto.properties.quantidade.format).toBe('int32');
+    expect(schemas.UpdateAderecoDesabilitadoDto.properties.desabilitado.type).toBe('boolean');
     expect(Object.keys(paths['/api/gestao/aderecos'].post.responses)).toEqual(expect.arrayContaining(['201', '400', '401', '403', '404', '413', '415']));
     expect(paths['/api/gestao/aderecos/{id}'].delete.responses).toHaveProperty('204');
+    expect(paths['/api/gestao/aderecos/{id}/quantidade'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateAderecoQuantidadeDto');
+    expect(paths['/api/gestao/aderecos/{id}/desabilitado'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateAderecoDesabilitadoDto');
     expect(paths['/api/aderecos'].get.security).toBeUndefined();
   });
 });

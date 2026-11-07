@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiNoContentRe
 import { AdminGuard, JwtAuthGuard } from '../auth/auth.guards.js';
 import { AderecoService } from './adereco.service.js';
 import type { AderecoUpload } from './adereco.service.js';
-import { AderecoManagementDto, AderecoPublicDto, CreateAderecoBodyDto, CreateAderecoMultipartDto, PatchAderecoBodyDto, PatchAderecoMultipartDto } from './dto/adereco.dto.js';
+import { AderecoManagementDto, AderecoPublicDto, CreateAderecoBodyDto, CreateAderecoMultipartDto, PatchAderecoBodyDto, PatchAderecoMultipartDto, UpdateAderecoDesabilitadoDto, UpdateAderecoQuantidadeDto } from './dto/adereco.dto.js';
 
 @Catch()
 class UploadErrorFilter implements ExceptionFilter {
@@ -26,6 +26,10 @@ export class AderecoController {
   create(@Body() body: CreateAderecoBodyDto, @UploadedFile() file: AderecoUpload) { return this.service.create(body, file); }
   @Patch(':id') @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 5 * 1024 * 1024 } })) @UseFilters(UploadErrorFilter) @ApiConsumes('multipart/form-data') @ApiBody({ type: PatchAderecoMultipartDto }) @ApiOkResponse({ type: AderecoManagementDto }) @ApiResponse({ status: 400, description: 'Campos inválidos' }) @ApiResponse({ status: 413, description: 'Foto maior que 5 MiB' }) @ApiResponse({ status: 415, description: 'Formato não suportado' })
   update(@Param('id') id: string, @Body() body: PatchAderecoBodyDto, @UploadedFile() file?: AderecoUpload) { return this.service.update(id, body, file); }
+  @Patch(':id/quantidade') @ApiBody({ type: UpdateAderecoQuantidadeDto }) @ApiOkResponse({ type: AderecoManagementDto }) @ApiResponse({ status: 400, description: 'Quantidade inválida' })
+  updateQuantity(@Param('id') id: string, @Body() body: UpdateAderecoQuantidadeDto) { return this.service.updateQuantity(id, body); }
+  @Patch(':id/desabilitado') @ApiBody({ type: UpdateAderecoDesabilitadoDto }) @ApiOkResponse({ type: AderecoManagementDto }) @ApiResponse({ status: 400, description: 'Valor de desabilitado inválido' })
+  updateDisabled(@Param('id') id: string, @Body() body: UpdateAderecoDesabilitadoDto) { return this.service.updateDisabled(id, body); }
   @Delete(':id') @HttpCode(HttpStatus.NO_CONTENT) @ApiNoContentResponse({ description: 'Adereço excluído logicamente' }) remove(@Param('id') id: string) { return this.service.remove(id); }
 }
 

@@ -48,6 +48,14 @@ describe('AderecoService', () => {
     await service.remove(rows[0].id);
     await expect(service.get(rows[0].id)).rejects.toBeInstanceOf(NotFoundException);
   });
+  it('updates quantity and disabled state through dedicated operations', async () => {
+    await service.create({ nome: 'A', preco: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    expect((await service.updateQuantity(row.id, { quantidade: '7' })).quantidade).toBe(7);
+    expect((await service.updateDisabled(row.id, { desabilitado: true })).desabilitado).toBe(true);
+    await expect(service.updateQuantity(row.id, { quantidade: '1.5' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateDisabled(row.id, { desabilitado: 'false' })).rejects.toBeInstanceOf(BadRequestException);
+  });
   it.each([
     { nome: '', preco: '1', quantidade: '1' }, { nome: 'x'.repeat(101), preco: '1', quantidade: '1' },
     { nome: 'x', preco: '-1', quantidade: '1' }, { nome: 'x', preco: '1.001', quantidade: '1' },

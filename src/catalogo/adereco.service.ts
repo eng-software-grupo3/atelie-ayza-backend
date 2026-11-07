@@ -76,6 +76,17 @@ export class AderecoService {
     try { return this.project(await this.repo.save(row), true); }
     catch (error) { if (photo) await unlink(join(directory(), photo.split('/').pop()!)).catch(() => undefined); throw error; }
   }
+  async updateQuantity(id: string, data: Record<string, unknown>) {
+    const row = await this.find(id);
+    row.quantidade = quantity(data.quantidade);
+    return this.project(await this.repo.save(row), true);
+  }
+  async updateDisabled(id: string, data: Record<string, unknown>) {
+    const row = await this.find(id);
+    if (typeof data.desabilitado !== 'boolean') throw new BadRequestException('desabilitado inválido');
+    row.desabilitado = data.desabilitado;
+    return this.project(await this.repo.save(row), true);
+  }
   async remove(id: string): Promise<void> { const row = await this.find(id); row.excluido = true; await this.repo.save(row); }
 
   private validateName(value: unknown): asserts value is string {

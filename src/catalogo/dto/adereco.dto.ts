@@ -13,6 +13,14 @@ export class PatchAderecoMultipartDto {
 }
 export class CreateAderecoBodyDto { [key: string]: unknown; nome!: string; preco!: string | number; quantidade!: string | number; }
 export class PatchAderecoBodyDto { [key: string]: unknown; nome?: string; preco?: string | number; }
+export class UpdateAderecoQuantidadeDto {
+  [key: string]: unknown;
+  @ApiProperty({ type: Number, format: 'int32', minimum: 0 }) quantidade!: number;
+}
+export class UpdateAderecoDesabilitadoDto {
+  [key: string]: unknown;
+  @ApiProperty({ type: Boolean }) desabilitado!: boolean;
+}
 export class AderecoManagementDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty() nome!: string;
