@@ -8,14 +8,13 @@ import { Modelo } from './entities/modelo.entity.js';
 import { Tecido } from './entities/tecido.entity.js';
 import { TecidoController, TecidosPublicController } from './tecido/tecido.controller.js';
 import { TecidoService } from './tecido/tecido.service.js';
-
 import {
   ModeloController,
   ModelosPublicController,
 } from './modelo/modelo.controller.js';
-
-
 import { ModeloService } from './modelo/modelo.service.js';
+import { AderecoController, AderecosPublicController } from './adereco.controller.js';
+import { AderecoService } from './adereco.service.js';
 
 @Module({
   imports: [
@@ -27,10 +26,13 @@ import { ModeloService } from './modelo/modelo.service.js';
     ModelosPublicController,
     TecidoController,
     TecidosPublicController,
+    AderecoController,
+    AderecosPublicController,
   ],
   providers: [
     ModeloService,
     TecidoService,
+    AderecoService,
   ],
   exports: [TypeOrmModule],
 })
