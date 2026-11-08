@@ -16,10 +16,11 @@ import { TecidoService } from './tecido.service.js';
 describe('tecido HTTP API', () => {
   let app: NestExpressApplication;
   let dir: string;
-  const record = { id: '7bcb11e2-2fa4-4fd0-a2df-c6f5ecb7b97d', nome: 'Linho', foto: null, preco_metro: 12, quantidade_m: 3, desabilitado: false };
+  const record = { id: '7bcb11e2-2fa4-4fd0-a2df-c6f5ecb7b97d', nome: 'Linho', foto: null, preco_metro: 12, quantidade: 3, desabilitado: false };
   const service = {
     list: vi.fn(async (admin = true) => admin ? [record] : [{ id: record.id, nome: record.nome, foto: null, preco_metro: 12 }]),
-    get: vi.fn(async () => record), create: vi.fn(async () => record), update: vi.fn(async () => record), remove: vi.fn(async () => undefined),
+    get: vi.fn(async () => record), create: vi.fn(async () => record), update: vi.fn(async () => record),
+    updateQuantity: vi.fn(async () => record), updateDisabled: vi.fn(async () => record), remove: vi.fn(async () => undefined),
   };
 
   beforeEach(async () => {
@@ -41,10 +42,12 @@ describe('tecido HTTP API', () => {
   it('routes management CRUD with authorization and expected HTTP statuses', async () => {
     await request(app.getHttpServer()).get('/api/gestao/tecidos').expect(401);
     await request(app.getHttpServer()).get('/api/gestao/tecidos').set('Authorization', 'Bearer user').expect(403);
-    await request(app.getHttpServer()).get('/api/gestao/tecidos').set('Authorization', 'Bearer admin').expect(200).expect(({ body }) => expect(body[0]).toHaveProperty('quantidade_m', 3));
+    await request(app.getHttpServer()).get('/api/gestao/tecidos').set('Authorization', 'Bearer admin').expect(200).expect(({ body }) => expect(body[0]).toHaveProperty('quantidade', 3));
     await request(app.getHttpServer()).get(`/api/gestao/tecidos/${record.id}`).set('Authorization', 'Bearer admin').expect(200);
-    await request(app.getHttpServer()).post('/api/gestao/tecidos').set('Authorization', 'Bearer admin').field('nome', 'Linho').field('preco_metro', '12').field('quantidade_m', '3').attach('foto', Buffer.from('not image'), 'x.png').expect(201);
+    await request(app.getHttpServer()).post('/api/gestao/tecidos').set('Authorization', 'Bearer admin').field('nome', 'Linho').field('preco_metro', '12').field('quantidade', '3').attach('foto', Buffer.from('not image'), 'x.png').expect(201);
     await request(app.getHttpServer()).patch(`/api/gestao/tecidos/${record.id}`).set('Authorization', 'Bearer admin').field('nome', 'Novo').expect(200);
+    await request(app.getHttpServer()).patch(`/api/gestao/tecidos/${record.id}/quantidade`).set('Authorization', 'Bearer admin').send({ quantidade: 4.5 }).expect(200);
+    await request(app.getHttpServer()).patch(`/api/gestao/tecidos/${record.id}/desabilitado`).set('Authorization', 'Bearer admin').send({ desabilitado: true }).expect(200);
     await request(app.getHttpServer()).delete(`/api/gestao/tecidos/${record.id}`).set('Authorization', 'Bearer admin').expect(204).expect('');
   });
 
@@ -58,7 +61,7 @@ describe('tecido HTTP API', () => {
   it.each([[400], [404], [413], [415]])('preserves service HTTP status %i', async (status) => {
     const exception = status === 400 ? new BadRequestException() : status === 404 ? new NotFoundException() : status === 413 ? new PayloadTooLargeException() : new UnsupportedMediaTypeException();
     service.create.mockRejectedValueOnce(exception);
-    await request(app.getHttpServer()).post('/api/gestao/tecidos').set('Authorization', 'Bearer admin').field('nome', 'A').field('preco_metro', '1').field('quantidade_m', '1').attach('foto', Buffer.from('a'), 'a.jpg').expect(status);
+    await request(app.getHttpServer()).post('/api/gestao/tecidos').set('Authorization', 'Bearer admin').field('nome', 'A').field('preco_metro', '1').field('quantidade', '1').attach('foto', Buffer.from('a'), 'a.jpg').expect(status);
   });
 
   it('maps Multer file-size errors to 413 before calling the service', async () => {
@@ -68,7 +71,7 @@ describe('tecido HTTP API', () => {
       .set('Authorization', 'Bearer admin')
       .field('nome', 'Linho')
       .field('preco_metro', '12')
-      .field('quantidade_m', '3')
+      .field('quantidade', '3')
       .attach('foto', oversized, 'large.png')
       .expect(413);
     expect(service.create).not.toHaveBeenCalled();
@@ -88,19 +91,23 @@ describe('tecido HTTP API', () => {
     const components: any = document.components?.schemas;
     const post = paths['/api/gestao/tecidos']!.post!;
     expect(post.requestBody?.content?.['multipart/form-data']?.schema?.$ref).toContain('CreateTecidoMultipartDto');
-    expect(components.CreateTecidoMultipartDto.required).toEqual(['nome', 'foto', 'preco_metro', 'quantidade_m']);
+    expect(components.CreateTecidoMultipartDto.required).toEqual(['nome', 'foto', 'preco_metro', 'quantidade']);
     expect(Object.keys(components.PatchTecidoMultipartDto.properties)).toEqual(['nome', 'foto', 'preco_metro']);
     expect(Object.keys(post.responses ?? {})).toEqual(expect.arrayContaining(['201', '400', '401', '403', '404', '413', '415']));
     const detail = paths['/api/gestao/tecidos/{id}']!;
     expect(detail.get.responses['200'].content['application/json'].schema.$ref).toContain('TecidoManagementDto');
     expect(detail.patch.requestBody.content['multipart/form-data'].schema.$ref).toContain('PatchTecidoMultipartDto');
     expect(Object.keys(detail.patch.responses)).toEqual(expect.arrayContaining(['200', '400', '401', '403', '404', '413', '415']));
-    expect(Object.keys(components.TecidoManagementDto.properties)).toEqual(['id', 'nome', 'foto', 'preco_metro', 'quantidade_m', 'desabilitado']);
+    expect(Object.keys(components.TecidoManagementDto.properties)).toEqual(['id', 'nome', 'foto', 'preco_metro', 'quantidade', 'desabilitado']);
+    expect(components.UpdateTecidoQuantidadeDto.properties.quantidade.type).toBe('number');
+    expect(components.UpdateTecidoDesabilitadoDto.properties.desabilitado.type).toBe('boolean');
     const pub = paths['/api/tecidos']!.get!;
     const fields = Object.keys(components.TecidoPublicDto.properties);
     expect(fields).toEqual(['id', 'nome', 'foto', 'preco_metro']);
     expect(pub.responses).toHaveProperty('200');
     expect(pub.security).toBeUndefined();
     expect(detail.delete.responses).toHaveProperty('204');
+    expect(paths['/api/gestao/tecidos/{id}/quantidade'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateTecidoQuantidadeDto');
+    expect(paths['/api/gestao/tecidos/{id}/desabilitado'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateTecidoDesabilitadoDto');
   });
 });

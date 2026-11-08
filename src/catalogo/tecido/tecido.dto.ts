@@ -11,7 +11,7 @@ export class CreateTecidoMultipartDto {
   preco_metro!: number;
 
   @ApiProperty({ type: Number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01 })
-  quantidade_m!: number;
+  quantidade!: number;
 }
 
 export class PatchTecidoMultipartDto {
@@ -29,13 +29,23 @@ export class CreateTecidoBodyDto {
   [key: string]: unknown;
   nome!: string;
   preco_metro!: string | number;
-  quantidade_m!: string | number;
+  quantidade!: string | number;
 }
 
 export class PatchTecidoBodyDto {
   [key: string]: unknown;
   nome?: string;
   preco_metro?: string | number;
+}
+
+export class UpdateTecidoQuantidadeDto {
+  [key: string]: unknown;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01 }) quantidade!: number;
+}
+
+export class UpdateTecidoDesabilitadoDto {
+  [key: string]: unknown;
+  @ApiProperty({ type: Boolean }) desabilitado!: boolean;
 }
 
 export class TecidoManagementDto {
@@ -48,7 +58,7 @@ export class TecidoManagementDto {
   @ApiProperty({ type: Number })
   preco_metro!: number;
   @ApiProperty({ type: Number })
-  quantidade_m!: number;
+  quantidade!: number;
   @ApiProperty()
   desabilitado!: boolean;
 }

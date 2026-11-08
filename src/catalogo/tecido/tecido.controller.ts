@@ -13,6 +13,7 @@ import type { TecidoUpload } from './tecido.service.js';
 import {
   CreateTecidoBodyDto, CreateTecidoMultipartDto, PatchTecidoBodyDto,
   PatchTecidoMultipartDto, TecidoManagementDto, TecidoPublicDto,
+  UpdateTecidoDesabilitadoDto, UpdateTecidoQuantidadeDto,
 } from './tecido.dto.js';
 @Catch()
 class UploadErrorFilter implements ExceptionFilter {
@@ -62,6 +63,18 @@ export class TecidoController {
   @ApiResponse({ status: 413, description: 'Foto maior que 5 MiB' })
   @ApiResponse({ status: 415, description: 'Formato de foto não suportado' })
   update(@Param('id') id: string, @Body() body: PatchTecidoBodyDto, @UploadedFile() file?: TecidoUpload) { return this.service.update(id, body, file); }
+
+  @Patch(':id/quantidade')
+  @ApiBody({ type: UpdateTecidoQuantidadeDto })
+  @ApiOkResponse({ type: TecidoManagementDto })
+  @ApiResponse({ status: 400, description: 'Quantidade inválida' })
+  updateQuantity(@Param('id') id: string, @Body() body: UpdateTecidoQuantidadeDto) { return this.service.updateQuantity(id, body); }
+
+  @Patch(':id/desabilitado')
+  @ApiBody({ type: UpdateTecidoDesabilitadoDto })
+  @ApiOkResponse({ type: TecidoManagementDto })
+  @ApiResponse({ status: 400, description: 'Valor de desabilitado inválido' })
+  updateDisabled(@Param('id') id: string, @Body() body: UpdateTecidoDesabilitadoDto) { return this.service.updateDisabled(id, body); }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

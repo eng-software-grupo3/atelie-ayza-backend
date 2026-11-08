@@ -44,57 +44,66 @@ describe('TecidoService', () => {
   });
 
   it('creates with generated id and server controlled defaults', async () => {
-    const result = await service.create({ nome: 'Linho', preco_metro: '12.50', quantidade_m: '2.25', excluido: true, desabilitado: true }, file());
-    expect(result).toMatchObject({ id: 'server-generated-uuid', nome: 'Linho', preco_metro: 12.5, quantidade_m: 2.25, desabilitado: false });
+    const result = await service.create({ nome: 'Linho', preco_metro: '12.50', quantidade: '2.25', excluido: true, desabilitado: true }, file());
+    expect(result).toMatchObject({ id: 'server-generated-uuid', nome: 'Linho', preco_metro: 12.5, quantidade: 2.25, desabilitado: false });
     expect(rows[0].excluido).toBe(false);
   });
 
   it('accepts name length 100 and the maximum numeric(10,2) amount', async () => {
-    const result = await service.create({ nome: 'N'.repeat(100), preco_metro: '99999999.99', quantidade_m: '0.01' }, file());
+    const result = await service.create({ nome: 'N'.repeat(100), preco_metro: '99999999.99', quantidade: '0.01' }, file());
     expect(result.nome).toHaveLength(100);
     expect(result.preco_metro).toBe(99999999.99);
     expect(rows[0].quantidadeM).toBe(0.01);
   });
 
   it.each([
-    [{ nome: '', preco_metro: '1', quantidade_m: '1' }],
-    [{ nome: 'x'.repeat(101), preco_metro: '1', quantidade_m: '1' }],
-    [{ nome: 'x', preco_metro: '-1', quantidade_m: '1' }],
-    [{ nome: 'x', preco_metro: '1.001', quantidade_m: '1' }],
-    [{ nome: 'x', preco_metro: '1', quantidade_m: '100000000' }],
-    [{ nome: 'x', preco_metro: '100000000', quantidade_m: '1' }],
-    [{ nome: 'x', preco_metro: '1', quantidade_m: '-0.01' }],
+    [{ nome: '', preco_metro: '1', quantidade: '1' }],
+    [{ nome: 'x'.repeat(101), preco_metro: '1', quantidade: '1' }],
+    [{ nome: 'x', preco_metro: '-1', quantidade: '1' }],
+    [{ nome: 'x', preco_metro: '1.001', quantidade: '1' }],
+    [{ nome: 'x', preco_metro: '1', quantidade: '100000000' }],
+    [{ nome: 'x', preco_metro: '100000000', quantidade: '1' }],
+    [{ nome: 'x', preco_metro: '1', quantidade: '-0.01' }],
   ])('rejects invalid create payloads', async (payload) => {
-    const upload = payload.nome === 'x' && payload.quantidade_m === '1' ? undefined : file();
+    const upload = payload.nome === 'x' && payload.quantidade === '1' ? undefined : file();
     await expect(service.create(payload, upload)).rejects.toBeInstanceOf(BadRequestException);
     expect(rows).toHaveLength(0);
   });
 
   it('rejects a missing photo without persisting a record', async () => {
-    await expect(service.create({ nome: 'Linho', preco_metro: '1', quantidade_m: '1' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ nome: 'Linho', preco_metro: '1', quantidade: '1' })).rejects.toBeInstanceOf(BadRequestException);
     expect(rows).toHaveLength(0);
   });
 
   it('projects and filters admin/public reads; patch preserves quantity and flags; delete keeps row', async () => {
-    await service.create({ nome: 'A', preco_metro: '1', quantidade_m: '7' }, file());
+    await service.create({ nome: 'A', preco_metro: '1', quantidade: '7' }, file());
     const row = rows[0];
     const publicResult = await service.list(false);
-    expect(publicResult[0]).not.toHaveProperty('quantidade_m');
+    expect(publicResult[0]).not.toHaveProperty('quantidade');
     row.desabilitado = true;
     expect(await service.list(false)).toEqual([]);
     expect(await service.list()).toHaveLength(1);
-    await service.update(row.id, { nome: 'B', quantidade_m: '999', excluido: true, desabilitado: false });
+    await service.update(row.id, { nome: 'B', quantidade: '999', excluido: true, desabilitado: false });
     expect(row).toMatchObject({ quantidadeM: 7, excluido: false, desabilitado: true, nome: 'B' });
     await service.remove(row.id);
     expect(rows).toHaveLength(1);
     expect(await service.list()).toEqual([]);
   });
 
+  it('updates quantity and disabled state through dedicated operations', async () => {
+    await service.create({ nome: 'A', preco_metro: '1', quantidade: '2.25' }, file());
+    const row = rows[0];
+    expect((await service.updateQuantity(row.id, { quantidade: '4.50' })).quantidade).toBe(4.5);
+    expect((await service.updateDisabled(row.id, { desabilitado: true })).desabilitado).toBe(true);
+    await expect(service.updateQuantity(row.id, { quantidade: '1.234' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateDisabled(row.id, { desabilitado: 'false' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('does not persist a record if photo storage fails', async () => {
     const occupied = join(directory, 'occupied');
     await writeFile(occupied, 'not a directory');
     process.env.TECIDOS_UPLOAD_DIR = occupied;
-    await expect(service.create({ nome: 'A', preco_metro: '1', quantidade_m: '1' }, file())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ nome: 'A', preco_metro: '1', quantidade: '1' }, file())).rejects.toBeInstanceOf(BadRequestException);
     expect(rows).toHaveLength(0);
   });
 });
