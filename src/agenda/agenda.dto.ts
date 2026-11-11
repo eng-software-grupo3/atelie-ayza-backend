@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { StatusPedido } from '../pedidos/entities/enums.js';
 
 export class AgendaDiaDto {
   @ApiProperty({ example: '2026-11-20' })
@@ -47,6 +48,8 @@ export class AgendaPedidoDto {
   num_pedido!: number;
   @ApiProperty({ type: AgendaClienteDto })
   cliente!: AgendaClienteDto;
+  @ApiProperty({ enum: StatusPedido })
+  status!: StatusPedido;
   @ApiProperty({ type: AgendaEntregaDto })
   entrega!: AgendaEntregaDto;
 }
