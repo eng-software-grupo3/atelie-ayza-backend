@@ -81,6 +81,7 @@ export class AgendaService {
       id: p.id,
       num_pedido: p.numPedido,
       cliente: { id: p.cliente.id, nome: p.cliente.nome },
+      status: p.status,
       entrega: {
         modalidade_frete: p.modalidadeFrete,
         endereco: {
