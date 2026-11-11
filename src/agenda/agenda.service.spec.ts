@@ -57,6 +57,7 @@ describe('AgendaService', () => {
           numPedido: 12,
           modalidadeFrete: 'sedex',
           cliente: { id: 'u1', nome: 'Ana', idGoogle: 'segredo', email: 'a@a.com' },
+          status: 'em_producao',
           endereco: {
             id: 'e1', rua: 'Rua A', numero: '10', complemento: null,
             bairro: 'Centro', cidade: 'Campina Grande', estado: 'PB', cep: '58400000',
@@ -69,6 +70,7 @@ describe('AgendaService', () => {
           id: 'p1',
           num_pedido: 12,
           cliente: { id: 'u1', nome: 'Ana' },
+          status: 'em_producao',
           entrega: {
             modalidade_frete: 'sedex',
             endereco: {
