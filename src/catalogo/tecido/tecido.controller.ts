@@ -1,5 +1,5 @@
 import {
-  ArgumentsHost, Body, Catch, Controller, Delete, ExceptionFilter, Get, HttpCode, HttpStatus, Param, Patch, Post, UseFilters,
+  ArgumentsHost, Body, Catch, Controller, Delete, ExceptionFilter, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseFilters,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -44,7 +44,8 @@ export class TecidoController {
 
   @Get(':id')
   @ApiOkResponse({ type: TecidoManagementDto })
-  get(@Param('id') id: string) { return this.service.get(id); }
+  @ApiResponse({ status: 400, description: 'ID inválido' })
+  get(@Param('id', new ParseUUIDPipe()) id: string) { return this.service.get(id); }
 
   @Post()
   @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 5 * 1024 * 1024 } }))
@@ -61,25 +62,26 @@ export class TecidoController {
   @UseFilters(UploadErrorFilter)
   @ApiConsumes('multipart/form-data') @ApiBody({ type: PatchTecidoMultipartDto })
   @ApiOkResponse({ type: TecidoManagementDto })
-  @ApiResponse({ status: 400, description: 'Campos inválidos' })
+  @ApiResponse({ status: 400, description: 'ID ou campos inválidos' })
   @ApiResponse({ status: 413, description: 'Foto maior que 5 MiB' })
   @ApiResponse({ status: 415, description: 'Formato de foto não suportado' })
-  update(@Param('id') id: string, @Body() body: PatchTecidoBodyDto, @UploadedFile() file?: TecidoUpload) { return this.service.update(id, body, file); }
+  update(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: PatchTecidoBodyDto, @UploadedFile() file?: TecidoUpload) { return this.service.update(id, body, file); }
 
   @Patch(':id/quantidade')
   @ApiBody({ type: UpdateTecidoQuantidadeDto })
   @ApiOkResponse({ type: TecidoManagementDto })
-  @ApiResponse({ status: 400, description: 'Quantidade inválida' })
-  updateQuantity(@Param('id') id: string, @Body() body: UpdateTecidoQuantidadeDto) { return this.service.updateQuantity(id, body); }
+  @ApiResponse({ status: 400, description: 'ID ou quantidade inválidos' })
+  updateQuantity(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateTecidoQuantidadeDto) { return this.service.updateQuantity(id, body); }
 
   @Patch(':id/desabilitado')
   @ApiBody({ type: UpdateTecidoDesabilitadoDto })
   @ApiOkResponse({ type: TecidoManagementDto })
-  @ApiResponse({ status: 400, description: 'Valor de desabilitado inválido' })
-  updateDisabled(@Param('id') id: string, @Body() body: UpdateTecidoDesabilitadoDto) { return this.service.updateDisabled(id, body); }
+  @ApiResponse({ status: 400, description: 'ID ou valor de desabilitado inválidos' })
+  updateDisabled(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateTecidoDesabilitadoDto) { return this.service.updateDisabled(id, body); }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Tecido excluído logicamente' })
-  remove(@Param('id') id: string) { return this.service.remove(id); }
+  @ApiResponse({ status: 400, description: 'ID inválido' })
+  remove(@Param('id', new ParseUUIDPipe()) id: string) { return this.service.remove(id); }
 }
