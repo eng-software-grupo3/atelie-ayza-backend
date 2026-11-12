@@ -12,7 +12,7 @@ import { TecidoService } from './tecido.service.js';
 import type { TecidoUpload } from './tecido.service.js';
 import {
   CreateTecidoBodyDto, CreateTecidoMultipartDto, PatchTecidoBodyDto,
-  PatchTecidoMultipartDto, TecidoManagementDto, TecidoPublicDto,
+  PatchTecidoMultipartDto, TecidoManagementDto,
   UpdateTecidoDesabilitadoDto, UpdateTecidoQuantidadeDto,
 } from './tecido.dto.js';
 @Catch()
@@ -80,12 +80,4 @@ export class TecidoController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Tecido excluído logicamente' })
   remove(@Param('id') id: string) { return this.service.remove(id); }
-}
-
-@ApiTags('tecidos')
-@Controller('api/tecidos')
-export class TecidosPublicController {
-  constructor(private readonly service: TecidoService) {}
-  @Get() @ApiOkResponse({ type: TecidoPublicDto, isArray: true })
-  list() { return this.service.list(false); }
 }

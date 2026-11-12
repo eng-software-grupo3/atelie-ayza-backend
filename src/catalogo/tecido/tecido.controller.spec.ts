@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../auth/auth.service.js';
-import { TecidoController, TecidosPublicController } from './tecido.controller.js';
+import { TecidoController } from './tecido.controller.js';
+import { TecidosPublicController } from './tecido-public.controller.js';
 import { configureTecidoStaticAssets } from './tecido.static.js';
 import { TecidoService } from './tecido.service.js';
 
