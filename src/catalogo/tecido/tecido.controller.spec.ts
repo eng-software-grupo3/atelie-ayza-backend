@@ -52,6 +52,15 @@ describe('tecido HTTP API', () => {
     await request(app.getHttpServer()).delete(`/api/gestao/tecidos/${record.id}`).set('Authorization', 'Bearer admin').expect(204).expect('');
   });
 
+  it('rejects invalid UUIDs before calling the get service', async () => {
+    await request(app.getHttpServer())
+      .get('/api/gestao/tecidos/not-a-uuid')
+      .set('Authorization', 'Bearer admin')
+      .expect(400);
+
+    expect(service.get).not.toHaveBeenCalled();
+  });
+
   it('keeps public route unguarded and returns only public fields', async () => {
     await request(app.getHttpServer()).get('/api/tecidos').expect(200).expect(({ body }) => {
       expect(body[0]).toEqual({ id: record.id, nome: record.nome, foto: null, preco_metro: 12 });
@@ -97,6 +106,7 @@ describe('tecido HTTP API', () => {
     expect(Object.keys(post.responses ?? {})).toEqual(expect.arrayContaining(['201', '400', '401', '403', '404', '413', '415']));
     const detail = paths['/api/gestao/tecidos/{id}']!;
     expect(detail.get.responses['200'].content['application/json'].schema.$ref).toContain('TecidoManagementDto');
+    expect(detail.get.responses).toHaveProperty('400');
     expect(detail.patch.requestBody.content['multipart/form-data'].schema.$ref).toContain('PatchTecidoMultipartDto');
     expect(Object.keys(detail.patch.responses)).toEqual(expect.arrayContaining(['200', '400', '401', '403', '404', '413', '415']));
     expect(Object.keys(components.TecidoManagementDto.properties)).toEqual(['id', 'nome', 'foto', 'preco_metro', 'quantidade', 'desabilitado']);
@@ -108,6 +118,7 @@ describe('tecido HTTP API', () => {
     expect(pub.responses).toHaveProperty('200');
     expect(pub.security).toBeUndefined();
     expect(detail.delete.responses).toHaveProperty('204');
+    expect(detail.delete.responses).toHaveProperty('400');
     expect(paths['/api/gestao/tecidos/{id}/quantidade'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateTecidoQuantidadeDto');
     expect(paths['/api/gestao/tecidos/{id}/desabilitado'].patch.requestBody.content['application/json'].schema.$ref).toContain('UpdateTecidoDesabilitadoDto');
   });
