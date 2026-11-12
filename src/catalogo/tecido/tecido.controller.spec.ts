@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException, NotFoundException, PayloadTooLargeException, UnauthorizedException, UnsupportedMediaTypeException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException, PayloadTooLargeException, UnauthorizedException, UnsupportedMediaTypeException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -58,7 +58,14 @@ describe('tecido HTTP API', () => {
       .set('Authorization', 'Bearer admin')
       .expect(400);
 
+    await request(app.getHttpServer())
+      .patch('/api/gestao/tecidos/not-a-uuid')
+      .set('Authorization', 'Bearer admin')
+      .field('nome', 'Linho')
+      .expect(400);
+
     expect(service.get).not.toHaveBeenCalled();
+    expect(service.update).not.toHaveBeenCalled();
   });
 
   it('keeps public route unguarded and returns only public fields', async () => {
@@ -74,6 +81,33 @@ describe('tecido HTTP API', () => {
     await request(app.getHttpServer()).post('/api/gestao/tecidos').set('Authorization', 'Bearer admin').field('nome', 'A').field('preco_metro', '1').field('quantidade', '1').attach('foto', Buffer.from('a'), 'a.jpg').expect(status);
   });
 
+  it.each([[400], [404], [413], [415]])('preserves PATCH service HTTP status %i through the upload filter', async (status) => {
+    const exception = status === 400 ? new BadRequestException() : status === 404 ? new NotFoundException() : status === 413 ? new PayloadTooLargeException() : new UnsupportedMediaTypeException();
+    service.update.mockRejectedValueOnce(exception);
+
+    await request(app.getHttpServer())
+      .patch(`/api/gestao/tecidos/${record.id}`)
+      .set('Authorization', 'Bearer admin')
+      .field('nome', 'Linho')
+      .expect(status);
+  });
+
+  it('delegates unexpected PATCH errors to the standard Nest exception handler', async () => {
+    service.update.mockRejectedValueOnce(new Error('sensitive internal detail'));
+    const loggerSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    try {
+      await request(app.getHttpServer())
+        .patch(`/api/gestao/tecidos/${record.id}`)
+        .set('Authorization', 'Bearer admin')
+        .field('nome', 'Linho')
+        .expect(500)
+        .expect(({ body }) => expect(JSON.stringify(body)).not.toContain('sensitive internal detail'));
+    } finally {
+      loggerSpy.mockRestore();
+    }
+  });
+
   it('maps Multer file-size errors to 413 before calling the service', async () => {
     const oversized = Buffer.alloc(5 * 1024 * 1024 + 1);
     await request(app.getHttpServer())
@@ -84,6 +118,20 @@ describe('tecido HTTP API', () => {
       .field('quantidade', '3')
       .attach('foto', oversized, 'large.png')
       .expect(413);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('maps other Multer LIMIT errors to 400 before calling the service', async () => {
+    await request(app.getHttpServer())
+      .post('/api/gestao/tecidos')
+      .set('Authorization', 'Bearer admin')
+      .field('nome', 'Linho')
+      .field('preco_metro', '12')
+      .field('quantidade', '3')
+      .attach('foto', Buffer.from('one'), 'one.png')
+      .attach('foto', Buffer.from('two'), 'two.png')
+      .expect(400);
+
     expect(service.create).not.toHaveBeenCalled();
   });
 
