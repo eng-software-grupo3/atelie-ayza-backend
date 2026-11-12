@@ -1,8 +1,9 @@
 import {
-  ArgumentsHost, Body, Catch, Controller, Delete, ExceptionFilter, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseFilters,
+  ArgumentsHost, Body, Catch, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseFilters,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { BaseExceptionFilter } from '@nestjs/core';
 import {
   ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiNoContentResponse,
   ApiOkResponse, ApiProduces, ApiResponse, ApiTags,
@@ -18,13 +19,20 @@ import { TecidoManagementDto } from './dto/tecido-management.dto.js';
 import { UpdateTecidoDesabilitadoDto } from './dto/update-tecido-desabilitado.dto.js';
 import { UpdateTecidoQuantidadeDto } from './dto/update-tecido-quantidade.dto.js';
 @Catch()
-class UploadErrorFilter implements ExceptionFilter {
-  catch(error: unknown, host: ArgumentsHost) {
-    const multerError = error as { code?: string; message?: string };
-    if (!multerError.code?.startsWith('LIMIT_')) throw error;
+class UploadErrorFilter extends BaseExceptionFilter {
+  catch(error: unknown, host: ArgumentsHost): void {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    if (typeof code !== 'string' || !code.startsWith('LIMIT_')) {
+      super.catch(error, host);
+      return;
+    }
+
     const response = host.switchToHttp().getResponse();
-    const status = multerError.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
-    response.status(status).json({ statusCode: status, message: multerError.message });
+    const status = code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    response.status(status).json({
+      statusCode: status,
+      message: error instanceof Error ? error.message : 'Falha no upload',
+    });
   }
 }
 @ApiTags('tecidos')
