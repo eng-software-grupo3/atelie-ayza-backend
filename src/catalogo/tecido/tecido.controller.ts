@@ -10,11 +10,13 @@ import {
 import { AdminGuard, JwtAuthGuard } from '../../auth/auth.guards.js';
 import { TecidoService } from './tecido.service.js';
 import type { TecidoUpload } from './tecido.service.js';
-import {
-  CreateTecidoBodyDto, CreateTecidoMultipartDto, PatchTecidoBodyDto,
-  PatchTecidoMultipartDto, TecidoManagementDto,
-  UpdateTecidoDesabilitadoDto, UpdateTecidoQuantidadeDto,
-} from './tecido.dto.js';
+import { CreateTecidoBodyDto } from './dto/create-tecido-body.dto.js';
+import { CreateTecidoMultipartDto } from './dto/create-tecido-multipart.dto.js';
+import { PatchTecidoBodyDto } from './dto/patch-tecido-body.dto.js';
+import { PatchTecidoMultipartDto } from './dto/patch-tecido-multipart.dto.js';
+import { TecidoManagementDto } from './dto/tecido-management.dto.js';
+import { UpdateTecidoDesabilitadoDto } from './dto/update-tecido-desabilitado.dto.js';
+import { UpdateTecidoQuantidadeDto } from './dto/update-tecido-quantidade.dto.js';
 @Catch()
 class UploadErrorFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {

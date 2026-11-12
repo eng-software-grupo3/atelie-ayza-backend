@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { TecidoPublicDto } from './tecido.dto.js';
+import { TecidoPublicDto } from './dto/tecido-public.dto.js';
 import { TecidoService } from './tecido.service.js';
 
 @ApiTags('tecidos')
