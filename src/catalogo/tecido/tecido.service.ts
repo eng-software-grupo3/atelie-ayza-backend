@@ -71,13 +71,13 @@ export class TecidoService {
   async get(id: string) { return this.project(await this.find(id), true); }
 
   async create(data: Record<string, unknown>, file?: TecidoUpload) {
-    this.validateName(data.nome);
+    const nome = this.normalizeName(data.nome);
     const precoMetro = amount(data.preco_metro, 'preco_metro');
     const quantidadeM = amount(data.quantidade, 'quantidade');
     if (!file) throw new BadRequestException('foto obrigatória');
     const foto = await this.savePhoto(file);
     try {
-      const tecido = this.repo.create({ nome: data.nome as string, foto: foto!, precoMetro, quantidadeM, desabilitado: false, excluido: false });
+      const tecido = this.repo.create({ nome, foto: foto!, precoMetro, quantidadeM, desabilitado: false, excluido: false });
       return this.project(await this.repo.save(tecido), true);
     } catch (error) {
       await unlink(join(directory(), foto!.split('/').pop()!)).catch(() => undefined);
@@ -87,7 +87,7 @@ export class TecidoService {
 
   async update(id: string, data: Record<string, unknown>, file?: TecidoUpload) {
     const tecido = await this.find(id);
-    if (data.nome !== undefined) { this.validateName(data.nome); tecido.nome = data.nome as string; }
+    if (data.nome !== undefined) tecido.nome = this.normalizeName(data.nome);
     if (data.preco_metro !== undefined) tecido.precoMetro = amount(data.preco_metro, 'preco_metro');
     const previousPhoto = tecido.foto;
     const photo = await this.savePhoto(file);
@@ -123,8 +123,11 @@ export class TecidoService {
     await this.repo.save(tecido);
   }
 
-  private validateName(value: unknown): asserts value is string {
-    if (typeof value !== 'string' || !value.trim() || value.length > 100) throw new BadRequestException('nome inválido');
+  private normalizeName(value: unknown): string {
+    if (typeof value !== 'string') throw new BadRequestException('nome inválido');
+    const nome = value.trim();
+    if (!nome || nome.length > 100) throw new BadRequestException('nome inválido');
+    return nome;
   }
 
   private async removeOldPhotoIfUnused(photo: string, tecidoId: string): Promise<void> {
