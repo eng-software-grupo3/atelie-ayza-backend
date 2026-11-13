@@ -1,13 +1,13 @@
 import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { decimalTransformer } from '../../database/decimal.transformer.js';
 
-export enum TipoModelo {
-  CIMA = 'cima',
-  BAIXO = 'baixo',
+export enum ParteModelo {
+  CIMA = 'CIMA',
+  BAIXO = 'BAIXO',
 }
 
 @Entity('modelo')
-@Check('"preco" >= 0')
+@Check('"valor" >= 0')
 @Check('"metragem_media_m" > 0')
 export class Modelo {
   @PrimaryGeneratedColumn('uuid')
@@ -16,20 +16,23 @@ export class Modelo {
   @Column({ length: 100 })
   nome!: string;
 
-  @Column({ type: 'enum', enum: TipoModelo, enumName: 'tipo_modelo' })
-  tipo!: TipoModelo;
+  @Column({ type: 'enum', enum: ParteModelo, enumName: 'parte_modelo' })
+  parte!: ParteModelo;
 
   @Column({ type: 'numeric', precision: 10, scale: 2, transformer: decimalTransformer })
-  preco!: number;
+  valor!: number;
 
   @Column({ name: 'metragem_media_m', type: 'numeric', precision: 10, scale: 2, transformer: decimalTransformer })
   metragemMediaM!: number;
 
-  @Column({ name: 'foto_svg', type: 'text' })
-  fotoSvg!: string;
+  @Column({ name: 'svg_url', type: 'text' })
+  svgUrl!: string;
 
-  @Column({ default: false })
-  desabilitado!: boolean;
+  @Column({ name: 'atualizado_em', type: 'timestamptz' })
+  atualizadoEm!: Date;
+
+  @Column({ default: true })
+  habilitado!: boolean;
 
   @Column({ default: false })
   excluido!: boolean;
