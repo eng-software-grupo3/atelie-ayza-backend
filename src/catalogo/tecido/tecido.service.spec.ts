@@ -78,16 +78,73 @@ describe('TecidoService', () => {
   it('projects and filters admin/public reads; patch preserves quantity and flags; delete keeps row', async () => {
     await service.create({ nome: 'A', preco_metro: '1', quantidade: '7' }, file());
     const row = rows[0];
+    const originalPhoto = row.foto;
     const publicResult = await service.list(false);
     expect(publicResult[0]).not.toHaveProperty('quantidade');
     row.desabilitado = true;
     expect(await service.list(false)).toEqual([]);
     expect(await service.list()).toHaveLength(1);
     await service.update(row.id, { nome: 'B', quantidade: '999', excluido: true, desabilitado: false });
-    expect(row).toMatchObject({ quantidadeM: 7, excluido: false, desabilitado: true, nome: 'B' });
+    expect(row).toMatchObject({ quantidadeM: 7, excluido: false, desabilitado: true, nome: 'B', foto: originalPhoto });
+    expect(await readFile(join(directory, originalPhoto.split('/').pop()!))).toEqual(signatures.png);
     await service.remove(row.id);
     expect(rows).toHaveLength(1);
     expect(await service.list()).toEqual([]);
+  });
+
+  it('removes the previous managed photo after saving its replacement', async () => {
+    await service.create({ nome: 'Linho', preco_metro: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const previousPhoto = row.foto as string;
+    const previousFile = join(directory, previousPhoto.split('/').pop()!);
+
+    const updated = await service.update(row.id, {}, file(signatures.jpg));
+    const replacementPhoto = updated.foto as string;
+
+    expect(replacementPhoto).not.toBe(previousPhoto);
+    await expect(readFile(previousFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(join(directory, replacementPhoto.split('/').pop()!))).toEqual(signatures.jpg);
+  });
+
+  it('keeps the previous photo if saving the replacement fails', async () => {
+    await service.create({ nome: 'Linho', preco_metro: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const previousPhoto = row.foto as string;
+    const previousFile = join(directory, previousPhoto.split('/').pop()!);
+    let attemptedPhoto: string | undefined;
+    repo.save.mockImplementationOnce(async (tecido) => {
+      attemptedPhoto = tecido.foto;
+      throw new Error('Falha simulada ao salvar tecido');
+    });
+
+    await expect(service.update(row.id, {}, file(signatures.jpg))).rejects.toThrow('Falha simulada ao salvar tecido');
+
+    expect(await readFile(previousFile)).toEqual(signatures.png);
+    expect(attemptedPhoto).toBeDefined();
+    await expect(readFile(join(directory, attemptedPhoto!.split('/').pop()!))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not delete an old photo still referenced by another fabric', async () => {
+    await service.create({ nome: 'Linho', preco_metro: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const previousPhoto = row.foto as string;
+    const previousFile = join(directory, previousPhoto.split('/').pop()!);
+    rows.push({ id: 'another-fabric', foto: previousPhoto });
+
+    await service.update(row.id, {}, file(signatures.jpg));
+
+    expect(await readFile(previousFile)).toEqual(signatures.png);
+  });
+
+  it('does not delete a seed photo when replacing it', async () => {
+    const seedPhoto = '/uploads/tecidos/seed-lycra-lisa-rosa.png';
+    const seedFile = join(directory, 'seed-lycra-lisa-rosa.png');
+    await writeFile(seedFile, signatures.png);
+    rows.push({ id: 'seeded-fabric', nome: 'Lycra Lisa Rosa', foto: seedPhoto, precoMetro: 1, quantidadeM: 1, excluido: false });
+
+    await service.update('seeded-fabric', {}, file(signatures.jpg));
+
+    expect(await readFile(seedFile)).toEqual(signatures.png);
   });
 
   it('updates quantity and disabled state through dedicated operations', async () => {

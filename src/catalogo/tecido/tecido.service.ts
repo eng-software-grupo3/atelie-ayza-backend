@@ -11,7 +11,19 @@ import { Tecido } from '../entities/tecido.entity.js';
 
 const MAX_SIZE = 5 * 1024 * 1024;
 const directory = () => process.env.TECIDOS_UPLOAD_DIR || join(process.cwd(), 'uploads/tecidos');
+const MANAGED_PHOTO_PATH = /^\/uploads\/tecidos\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp))$/i;
 export type TecidoUpload = { buffer: Buffer; size: number };
+
+function errorDetails(error: unknown): string {
+  return error instanceof Error ? error.stack ?? error.message : String(error);
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+  return undefined;
+}
 
 function detectedType(buffer: Buffer): string | undefined {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
@@ -45,8 +57,7 @@ export class TecidoService {
       await mkdir(directory(), { recursive: true });
       await writeFile(join(directory(), filename), file.buffer, { flag: 'wx' });
     } catch (error) {
-      const details = error instanceof Error ? error.stack ?? error.message : String(error);
-      this.logger.error('Falha ao salvar foto', details);
+      this.logger.error('Falha ao salvar foto', errorDetails(error));
       throw new InternalServerErrorException('Falha ao salvar foto');
     }
     return `/uploads/tecidos/${filename}`;
@@ -78,13 +89,19 @@ export class TecidoService {
     const tecido = await this.find(id);
     if (data.nome !== undefined) { this.validateName(data.nome); tecido.nome = data.nome as string; }
     if (data.preco_metro !== undefined) tecido.precoMetro = amount(data.preco_metro, 'preco_metro');
+    const previousPhoto = tecido.foto;
     const photo = await this.savePhoto(file);
     if (photo) tecido.foto = photo;
-    try { return this.project(await this.repo.save(tecido), true); }
+    let saved: Tecido;
+    try { saved = await this.repo.save(tecido); }
     catch (error) {
       if (photo) await unlink(join(directory(), photo.split('/').pop()!)).catch(() => undefined);
       throw error;
     }
+    if (photo && previousPhoto && previousPhoto !== photo) {
+      await this.removeOldPhotoIfUnused(previousPhoto, tecido.id);
+    }
+    return this.project(saved, true);
   }
 
   async updateQuantity(id: string, data: Record<string, unknown>) {
@@ -109,6 +126,29 @@ export class TecidoService {
   private validateName(value: unknown): asserts value is string {
     if (typeof value !== 'string' || !value.trim() || value.length > 100) throw new BadRequestException('nome inválido');
   }
+
+  private async removeOldPhotoIfUnused(photo: string, tecidoId: string): Promise<void> {
+    const filename = MANAGED_PHOTO_PATH.exec(photo)?.[1];
+    if (!filename) return;
+
+    let references: Tecido[];
+    try {
+      references = await this.repo.find({ where: { foto: photo } });
+    } catch (error) {
+      this.logger.warn('Não foi possível verificar referências à foto antiga', errorDetails(error));
+      return;
+    }
+    if (references.some((reference) => reference.id !== tecidoId)) return;
+
+    try {
+      await unlink(join(directory(), filename));
+    } catch (error) {
+      if (errorCode(error) !== 'ENOENT') {
+        this.logger.warn('Não foi possível remover a foto antiga', errorDetails(error));
+      }
+    }
+  }
+
   private async find(id: string) {
     const tecido = await this.repo.findOneBy({ id, excluido: false });
     if (!tecido) throw new NotFoundException();
