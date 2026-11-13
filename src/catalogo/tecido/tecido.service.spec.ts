@@ -50,14 +50,24 @@ describe('TecidoService', () => {
   });
 
   it('accepts name length 100 and the maximum numeric(10,2) amount', async () => {
-    const result = await service.create({ nome: 'N'.repeat(100), preco_metro: '99999999.99', quantidade: '0.01' }, file());
+    const result = await service.create({ nome: `  ${'N'.repeat(100)}  `, preco_metro: '99999999.99', quantidade: '0.01' }, file());
     expect(result.nome).toHaveLength(100);
     expect(result.preco_metro).toBe(99999999.99);
     expect(rows[0].quantidadeM).toBe(0.01);
   });
 
+  it('trims text names before saving on create and update', async () => {
+    const created = await service.create({ nome: '  Linho  ', preco_metro: '1', quantidade: '1' }, file());
+    expect(created.nome).toBe('Linho');
+
+    const updated = await service.update(created.id, { nome: '  Linho Premium  ' });
+    expect(updated.nome).toBe('Linho Premium');
+    expect(rows[0].nome).toBe('Linho Premium');
+  });
+
   it.each([
     [{ nome: '', preco_metro: '1', quantidade: '1' }],
+    [{ nome: '   ', preco_metro: '1', quantidade: '1' }],
     [{ nome: 'x'.repeat(101), preco_metro: '1', quantidade: '1' }],
     [{ nome: 'x', preco_metro: '-1', quantidade: '1' }],
     [{ nome: 'x', preco_metro: '1.001', quantidade: '1' }],
