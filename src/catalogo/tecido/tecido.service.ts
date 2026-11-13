@@ -49,7 +49,7 @@ export class TecidoService {
 
   async savePhoto(file?: TecidoUpload): Promise<string | undefined> {
     if (!file) return undefined;
-    if (file.size > MAX_SIZE) throw new PayloadTooLargeException();
+    if (file.size > MAX_SIZE || file.buffer.length > MAX_SIZE) throw new PayloadTooLargeException();
     const extension = detectedType(file.buffer);
     if (!extension) throw new UnsupportedMediaTypeException('Foto deve ser JPG, PNG ou WebP');
     const filename = `${randomUUID()}.${extension}`;
