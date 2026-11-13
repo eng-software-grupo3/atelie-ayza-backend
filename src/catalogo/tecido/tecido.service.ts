@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Injectable, NotFoundException,
+  BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException,
   PayloadTooLargeException, UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -31,6 +31,8 @@ function amount(value: unknown, field: string): number {
 
 @Injectable()
 export class TecidoService {
+  private readonly logger = new Logger(TecidoService.name);
+
   constructor(@InjectRepository(Tecido) private readonly repo: Repository<Tecido>) {}
 
   async savePhoto(file?: TecidoUpload): Promise<string | undefined> {
@@ -42,8 +44,10 @@ export class TecidoService {
     try {
       await mkdir(directory(), { recursive: true });
       await writeFile(join(directory(), filename), file.buffer, { flag: 'wx' });
-    } catch {
-      throw new BadRequestException('Falha ao salvar foto');
+    } catch (error) {
+      const details = error instanceof Error ? error.stack ?? error.message : String(error);
+      this.logger.error('Falha ao salvar foto', details);
+      throw new InternalServerErrorException('Falha ao salvar foto');
     }
     return `/uploads/tecidos/${filename}`;
   }

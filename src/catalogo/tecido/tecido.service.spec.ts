@@ -1,4 +1,4 @@
-import { BadRequestException, PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, Logger, PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -99,11 +99,19 @@ describe('TecidoService', () => {
     await expect(service.updateDisabled(row.id, { desabilitado: 'false' })).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('does not persist a record if photo storage fails', async () => {
+  it('returns an internal error and logs when photo storage fails', async () => {
     const occupied = join(directory, 'occupied');
     await writeFile(occupied, 'not a directory');
     process.env.TECIDOS_UPLOAD_DIR = occupied;
-    await expect(service.create({ nome: 'A', preco_metro: '1', quantidade: '1' }, file())).rejects.toBeInstanceOf(BadRequestException);
-    expect(rows).toHaveLength(0);
+    const loggerSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    try {
+      await expect(service.create({ nome: 'A', preco_metro: '1', quantidade: '1' }, file()))
+        .rejects.toBeInstanceOf(InternalServerErrorException);
+      expect(loggerSpy).toHaveBeenCalledWith('Falha ao salvar foto', expect.any(String));
+      expect(rows).toHaveLength(0);
+    } finally {
+      loggerSpy.mockRestore();
+    }
   });
 });
