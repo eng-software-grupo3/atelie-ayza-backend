@@ -41,6 +41,11 @@ describe('TecidoService', () => {
   it('rejects unsupported signatures and files larger than 5 MiB', async () => {
     await expect(service.savePhoto(file(Buffer.from('not an image')))).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
     await expect(service.savePhoto({ buffer: signatures.png, size: 5 * 1024 * 1024 + 1 })).rejects.toBeInstanceOf(PayloadTooLargeException);
+
+    const oversizedBuffer = Buffer.alloc(5 * 1024 * 1024 + 1);
+    signatures.png.copy(oversizedBuffer);
+    await expect(service.savePhoto({ buffer: oversizedBuffer, size: signatures.png.length }))
+      .rejects.toBeInstanceOf(PayloadTooLargeException);
   });
 
   it('creates with generated id and server controlled defaults', async () => {
