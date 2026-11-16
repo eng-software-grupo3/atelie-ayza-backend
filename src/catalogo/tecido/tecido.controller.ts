@@ -7,14 +7,14 @@ import {
   ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiNoContentResponse,
   ApiOkResponse, ApiProduces, ApiResponse, ApiTags,
 } from '@nestjs/swagger';
-import { AdminGuard, JwtAuthGuard } from '../auth/auth.guards.js';
+import { AdminGuard, JwtAuthGuard } from '../../auth/auth.guards.js';
 import { TecidoService } from './tecido.service.js';
 import type { TecidoUpload } from './tecido.service.js';
 import {
   CreateTecidoBodyDto, CreateTecidoMultipartDto, PatchTecidoBodyDto,
   PatchTecidoMultipartDto, TecidoManagementDto, TecidoPublicDto,
   UpdateTecidoDesabilitadoDto, UpdateTecidoQuantidadeDto,
-} from './dto/tecido.dto.js';
+} from './tecido.dto.js';
 @Catch()
 class UploadErrorFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {

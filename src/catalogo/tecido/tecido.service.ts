@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Repository } from 'typeorm';
-import { Tecido } from './entities/tecido.entity.js';
+import { Tecido } from '../entities/tecido.entity.js';
 
 const MAX_SIZE = 5 * 1024 * 1024;
 const directory = () => process.env.TECIDOS_UPLOAD_DIR || join(process.cwd(), 'uploads/tecidos');
