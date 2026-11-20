@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TecidoService } from './tecido.service.js';
+import { MAX_CATALOG_UPLOAD_SIZE } from '../upload.constants.js';
 
 const signatures: Record<string, Buffer> = {
   jpg: Buffer.from([0xff, 0xd8, 0xff, 0]),
@@ -40,16 +41,22 @@ describe('TecidoService', () => {
 
   it('rejects unsupported signatures and files larger than 5 MiB', async () => {
     await expect(service.savePhoto(file(Buffer.from('not an image')))).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
-    await expect(service.savePhoto({ buffer: signatures.png, size: 5 * 1024 * 1024 + 1 })).rejects.toBeInstanceOf(PayloadTooLargeException);
+    await expect(service.savePhoto({ buffer: signatures.png, size: MAX_CATALOG_UPLOAD_SIZE + 1 })).rejects.toBeInstanceOf(PayloadTooLargeException);
 
-    const oversizedBuffer = Buffer.alloc(5 * 1024 * 1024 + 1);
+    const oversizedBuffer = Buffer.alloc(MAX_CATALOG_UPLOAD_SIZE + 1);
     signatures.png.copy(oversizedBuffer);
     await expect(service.savePhoto({ buffer: oversizedBuffer, size: signatures.png.length }))
       .rejects.toBeInstanceOf(PayloadTooLargeException);
   });
 
   it('creates with generated id and server controlled defaults', async () => {
-    const result = await service.create({ nome: 'Linho', preco_metro: '12.50', quantidade: '2.25', excluido: true, desabilitado: true }, file());
+    const result = await service.create(
+      Object.assign(
+        { nome: 'Linho', preco_metro: '12.50', quantidade: '2.25' },
+        { excluido: true, desabilitado: true },
+      ),
+      file(),
+    );
     expect(result).toMatchObject({ id: 'server-generated-uuid', nome: 'Linho', preco_metro: 12.5, quantidade: 2.25, desabilitado: false });
     expect(rows[0].excluido).toBe(false);
   });
@@ -99,7 +106,14 @@ describe('TecidoService', () => {
     row.desabilitado = true;
     expect(await service.list(false)).toEqual([]);
     expect(await service.list()).toHaveLength(1);
-    await service.update(row.id, { nome: 'B', quantidade: '999', excluido: true, desabilitado: false });
+    await service.update(
+      row.id,
+      Object.assign({ nome: 'B' }, {
+        quantidade: '999',
+        excluido: true,
+        desabilitado: false,
+      }),
+    );
     expect(row).toMatchObject({ quantidadeM: 7, excluido: false, desabilitado: true, nome: 'B', foto: originalPhoto });
     expect(await readFile(join(directory, originalPhoto.split('/').pop()!))).toEqual(signatures.png);
     await service.remove(row.id);

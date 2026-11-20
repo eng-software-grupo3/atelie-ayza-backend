@@ -1,9 +1,10 @@
-import { BadRequestException, NotFoundException, PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { BadRequestException, InternalServerErrorException, Logger, NotFoundException, PayloadTooLargeException, UnsupportedMediaTypeException } from '@nestjs/common';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AderecoService } from './adereco.service.js';
+import { MAX_CATALOG_UPLOAD_SIZE } from '../upload.constants.js';
 
 const signatures: Record<string, Buffer> = { jpg: Buffer.from([0xff, 0xd8, 0xff, 0]), png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), webp: Buffer.from('RIFF0000WEBP') };
 const file = (buffer = signatures.png) => ({ buffer, size: buffer.length });
@@ -29,15 +30,32 @@ describe('AderecoService', () => {
   });
   it('rejects invalid signature and files over 5 MiB', async () => {
     await expect(service.savePhoto(file(Buffer.from('bad')))).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
-    await expect(service.savePhoto({ ...file(), size: 5 * 1024 * 1024 + 1 })).rejects.toBeInstanceOf(PayloadTooLargeException);
+    await expect(service.savePhoto({ ...file(), size: MAX_CATALOG_UPLOAD_SIZE + 1 })).rejects.toBeInstanceOf(PayloadTooLargeException);
+    const oversizedBuffer = Buffer.alloc(MAX_CATALOG_UPLOAD_SIZE + 1);
+    signatures.png.copy(oversizedBuffer);
+    await expect(service.savePhoto({ buffer: oversizedBuffer, size: signatures.png.length })).rejects.toBeInstanceOf(PayloadTooLargeException);
   });
   it('creates defaults/projection and preserves quantity and flags on patch', async () => {
-    const result = await service.create({ nome: 'Laço', preco: '12.50', quantidade: '4', desabilitado: true }, file());
+    const result = await service.create(
+      Object.assign(
+        { nome: '  Laço  ', preco: '12.50', quantidade: '4' },
+        { desabilitado: true },
+      ),
+      file(),
+    );
     expect(result).toMatchObject({ id: 'server-id', preco: 12.5, quantidade: 4, desabilitado: false });
+    expect(result.nome).toBe('Laço');
     expect(rows[0]).toMatchObject({ tipo: 'adereço', estoqueMinimo: 0, excluido: false });
     expect(await service.list(false)).toEqual([{ id: 'server-id', nome: 'Laço', foto: rows[0].foto, preco: 12.5 }]);
     rows[0].desabilitado = true;
-    await service.update(rows[0].id, { nome: 'Novo', preco: '3', quantidade: 99, desabilitado: false, excluido: true });
+    await service.update(
+      rows[0].id,
+      Object.assign({ nome: ' Novo ', preco: '3' }, {
+        quantidade: 99,
+        desabilitado: false,
+        excluido: true,
+      }),
+    );
     expect(rows[0]).toMatchObject({ nome: 'Novo', quantidade: 4, desabilitado: true, excluido: false });
     expect(await service.list(false)).toEqual([]); expect(await service.list()).toHaveLength(1);
     await service.remove(rows[0].id); expect(rows).toHaveLength(1); expect(await service.list()).toEqual([]);
@@ -67,5 +85,59 @@ describe('AderecoService', () => {
     repo.save.mockRejectedValueOnce(new Error('db failure'));
     await expect(service.create({ nome: 'A', preco: '1', quantidade: '1' }, file())).rejects.toThrow('db failure');
     expect(rows).toHaveLength(0);
+  });
+
+  it('removes the old managed photo after replacement', async () => {
+    await service.create({ nome: 'A', preco: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const oldPhoto = row.foto as string;
+    const oldPath = join(directory, oldPhoto.split('/').pop()!);
+    const updated = await service.update(row.id, {}, file(signatures.jpg));
+    expect(updated.foto).not.toBe(oldPhoto);
+    await expect(readFile(oldPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps the previous photo and removes the replacement if persistence fails', async () => {
+    await service.create({ nome: 'A', preco: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const oldPhoto = row.foto as string;
+    const oldPath = join(directory, oldPhoto.split('/').pop()!);
+    let attemptedPhoto: string | undefined;
+    repo.save.mockImplementationOnce(async (updated) => {
+      attemptedPhoto = updated.foto;
+      throw new Error('Falha simulada ao salvar adereço');
+    });
+
+    await expect(service.update(row.id, {}, file(signatures.jpg)))
+      .rejects.toThrow('Falha simulada ao salvar adereço');
+
+    expect(await readFile(oldPath)).toEqual(signatures.png);
+    expect(attemptedPhoto).toBeDefined();
+    await expect(readFile(join(directory, attemptedPhoto!.split('/').pop()!)))
+      .rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps an old photo while another record references it', async () => {
+    await service.create({ nome: 'A', preco: '1', quantidade: '1' }, file());
+    const row = rows[0];
+    const oldPhoto = row.foto as string;
+    const oldPath = join(directory, oldPhoto.split('/').pop()!);
+    rows.push({ id: 'other', foto: oldPhoto });
+    await service.update(row.id, {}, file(signatures.jpg));
+    expect(await readFile(oldPath)).toEqual(signatures.png);
+  });
+
+  it('returns an internal server error and logs when photo storage fails', async () => {
+    const occupied = join(directory, 'not-a-directory');
+    await writeFile(occupied, 'file');
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    process.env.ADERECOS_UPLOAD_DIR = occupied;
+    try {
+      await expect(service.savePhoto(file())).rejects.toBeInstanceOf(InternalServerErrorException);
+      expect(logger).toHaveBeenCalled();
+    } finally {
+      process.env.ADERECOS_UPLOAD_DIR = directory;
+      logger.mockRestore();
+    }
   });
 });

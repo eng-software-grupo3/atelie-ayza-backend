@@ -7,8 +7,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Modelo, ParteModelo } from '../entities/modelo.entity.js';
-import { CreateModeloDto, PatchModeloDto } from './modelo.dto.js';
-import { ModeloManagementDto,  ModeloPublicDto } from './modelo.dto.js';
+import { CreateModeloDto } from './dto/create-modelo.dto.js';
+import { ModeloManagementDto } from './dto/modelo-management.dto.js';
+import { ModeloPublicDto } from './dto/modelo-public.dto.js';
+import { PatchModeloDto } from './dto/patch-modelo.dto.js';
 
 function amount(value: unknown, field: string): number {
   if (typeof value !== 'string' && typeof value !== 'number') {
@@ -46,9 +48,9 @@ export class ModeloService {
   }
 
   async create(data: CreateModeloDto) {
-    this.validateName(data.nome);
+    const nome = this.normalizeName(data.nome);
     this.validateParte(data.parte);
-    this.validateSvgUrl(data.svg_url);
+    const svgUrl = this.normalizeSvgUrl(data.svg_url);
 
     const valor = amount(data.valor, 'valor');
     const metragemMediaM = amount(
@@ -63,11 +65,11 @@ export class ModeloService {
     }
 
     const modelo = this.repo.create({
-      nome: data.nome as string,
+      nome,
       parte: data.parte as ParteModelo,
       valor,
       metragemMediaM,
-      svgUrl: data.svg_url as string,
+      svgUrl,
       atualizadoEm: new Date(),
       habilitado: true,
       excluido: false,
@@ -80,8 +82,7 @@ export class ModeloService {
     const modelo = await this.find(id);
 
     if (data.nome !== undefined) {
-      this.validateName(data.nome);
-      modelo.nome = data.nome as string;
+      modelo.nome = this.normalizeName(data.nome);
     }
 
     if (data.parte !== undefined) {
@@ -109,8 +110,7 @@ export class ModeloService {
     }
 
     if (data.svg_url !== undefined) {
-      this.validateSvgUrl(data.svg_url);
-      modelo.svgUrl = data.svg_url as string;
+      modelo.svgUrl = this.normalizeSvgUrl(data.svg_url);
     }
 
     modelo.atualizadoEm = new Date();
@@ -137,14 +137,11 @@ export class ModeloService {
     return this.project(atualizado, true);
     }
 
-  private validateName(value: unknown): asserts value is string {
-    if (
-      typeof value !== 'string' ||
-      !value.trim() ||
-      value.length > 100
-    ) {
-      throw new BadRequestException('nome inválido');
-    }
+  private normalizeName(value: unknown): string {
+    if (typeof value !== 'string') throw new BadRequestException('nome inválido');
+    const nome = value.trim();
+    if (!nome || nome.length > 100) throw new BadRequestException('nome inválido');
+    return nome;
   }
 
   private validateParte(value: unknown): asserts value is ParteModelo {
@@ -153,10 +150,11 @@ export class ModeloService {
     }
   }
 
-  private validateSvgUrl(value: unknown): asserts value is string {
+  private normalizeSvgUrl(value: unknown): string {
     if (typeof value !== 'string' || !value.trim()) {
       throw new BadRequestException('svg_url inválida');
     }
+    return value.trim();
   }
 
   private async find(id: string) {

@@ -65,7 +65,11 @@ describe('ModeloService', () => {
   });
 
   it('creates a model with server controlled defaults', async () => {
-    const result = await service.create(validData);
+    const result = await service.create({
+      ...validData,
+      nome: '  Cortininha  ',
+      svg_url: '  <svg>exemplo</svg>  ',
+    });
 
     expect(result).toMatchObject({
       id: ID,
@@ -78,6 +82,8 @@ describe('ModeloService', () => {
     });
 
     expect(rows).toHaveLength(1);
+    expect(rows[0].nome).toBe('Cortininha');
+    expect(rows[0].svgUrl).toBe('<svg>exemplo</svg>');
     expect(rows[0].excluido).toBe(false);
     expect(rows[0].atualizadoEm).toBeInstanceOf(Date);
   });
@@ -174,7 +180,7 @@ describe('ModeloService', () => {
     const originalDate = row.atualizadoEm;
 
     const result = await service.update(ID, {
-      nome: 'Cortininha Atualizada',
+      nome: '  Cortininha Atualizada  ',
       valor: 55,
     });
 
@@ -185,6 +191,7 @@ describe('ModeloService', () => {
     });
 
     expect(row.excluido).toBe(false);
+    expect(row.nome).toBe('Cortininha Atualizada');
     expect(row.metragemMediaM).toBe(0.4);
     expect(row.atualizadoEm.getTime()).toBeGreaterThanOrEqual(
       originalDate.getTime(),

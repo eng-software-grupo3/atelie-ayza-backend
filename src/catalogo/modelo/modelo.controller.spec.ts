@@ -22,10 +22,8 @@ import {
 } from 'vitest';
 
 import { AuthService } from '../../auth/auth.service.js';
-import {
-  ModeloController,
-  ModelosPublicController,
-} from './modelo.controller.js';
+import { ModeloController } from './modelo.controller.js';
+import { ModelosPublicController } from './modelo-public.controller.js';
 import { ModeloService } from './modelo.service.js';
 
 const ID = '7bcb11e2-2fa4-4fd0-a2df-c6f5ecb7b97d';
@@ -163,6 +161,36 @@ describe('modelo HTTP API', () => {
       .set(auth)
       .expect(204)
       .expect('');
+  });
+
+  it('rejects non-UUID management IDs before calling the service', async () => {
+    const auth = { Authorization: 'Bearer admin' };
+
+    await request(app.getHttpServer())
+      .get('/api/gestao/modelos/not-a-uuid')
+      .set(auth)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch('/api/gestao/modelos/not-a-uuid')
+      .set(auth)
+      .send({ nome: 'Atualizado' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch('/api/gestao/modelos/not-a-uuid/habilitado')
+      .set(auth)
+      .send({ habilitado: false })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .delete('/api/gestao/modelos/not-a-uuid')
+      .set(auth)
+      .expect(400);
+
+    expect(service.get).not.toHaveBeenCalled();
+    expect(service.update).not.toHaveBeenCalled();
+    expect(service.remove).not.toHaveBeenCalled();
   });
 
   it('updates model enabled status', async () => {

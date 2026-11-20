@@ -11,6 +11,7 @@ import {
 import { AdminGuard, JwtAuthGuard } from '../../auth/auth.guards.js';
 import { TecidoService } from './tecido.service.js';
 import type { TecidoUpload } from './tecido.service.js';
+import { MAX_CATALOG_UPLOAD_SIZE } from '../upload.constants.js';
 import { CreateTecidoBodyDto } from './dto/create-tecido-body.dto.js';
 import { CreateTecidoMultipartDto } from './dto/create-tecido-multipart.dto.js';
 import { PatchTecidoBodyDto } from './dto/patch-tecido-body.dto.js';
@@ -56,7 +57,7 @@ export class TecidoController {
   get(@Param('id', new ParseUUIDPipe()) id: string) { return this.service.get(id); }
 
   @Post()
-  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: MAX_CATALOG_UPLOAD_SIZE } }))
   @UseFilters(UploadErrorFilter)
   @ApiConsumes('multipart/form-data') @ApiBody({ type: CreateTecidoMultipartDto })
   @ApiCreatedResponse({ type: TecidoManagementDto })
@@ -66,7 +67,7 @@ export class TecidoController {
   create(@Body() body: CreateTecidoBodyDto, @UploadedFile() file: TecidoUpload) { return this.service.create(body, file); }
 
   @Patch(':id')
-  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: MAX_CATALOG_UPLOAD_SIZE } }))
   @UseFilters(UploadErrorFilter)
   @ApiConsumes('multipart/form-data') @ApiBody({ type: PatchTecidoMultipartDto })
   @ApiOkResponse({ type: TecidoManagementDto })

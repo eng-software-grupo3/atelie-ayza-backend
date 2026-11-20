@@ -13,6 +13,7 @@ import { TecidoController } from './tecido.controller.js';
 import { TecidosPublicController } from './tecido-public.controller.js';
 import { configureTecidoStaticAssets } from './tecido.static.js';
 import { TecidoService } from './tecido.service.js';
+import { MAX_CATALOG_UPLOAD_SIZE } from '../upload.constants.js';
 
 describe('tecido HTTP API', () => {
   let app: NestExpressApplication;
@@ -109,7 +110,7 @@ describe('tecido HTTP API', () => {
   });
 
   it('maps Multer file-size errors to 413 before calling the service', async () => {
-    const oversized = Buffer.alloc(5 * 1024 * 1024 + 1);
+    const oversized = Buffer.alloc(MAX_CATALOG_UPLOAD_SIZE + 1);
     await request(app.getHttpServer())
       .post('/api/gestao/tecidos')
       .set('Authorization', 'Bearer admin')

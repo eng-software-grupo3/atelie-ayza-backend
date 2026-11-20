@@ -3,7 +3,7 @@ import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { configureTecidoStaticAssets } from './catalogo/tecido/tecido.static.js';
-import { configureAderecoStaticAssets } from './catalogo/adereco.static.js';
+import { configureAderecoStaticAssets } from './catalogo/adereco/adereco.static.js';
 
 function corsOrigin(): boolean | string[] {
   const origins = process.env.FRONTEND_URL?.split(',')

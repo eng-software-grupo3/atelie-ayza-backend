@@ -8,8 +8,12 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Repository } from 'typeorm';
 import { Tecido } from '../entities/tecido.entity.js';
+import { MAX_CATALOG_UPLOAD_SIZE } from '../upload.constants.js';
+import { CreateTecidoBodyDto } from './dto/create-tecido-body.dto.js';
+import { PatchTecidoBodyDto } from './dto/patch-tecido-body.dto.js';
+import { UpdateTecidoDesabilitadoDto } from './dto/update-tecido-desabilitado.dto.js';
+import { UpdateTecidoQuantidadeDto } from './dto/update-tecido-quantidade.dto.js';
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const directory = () => process.env.TECIDOS_UPLOAD_DIR || join(process.cwd(), 'uploads/tecidos');
 const MANAGED_PHOTO_PATH = /^\/uploads\/tecidos\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp))$/i;
 export type TecidoUpload = { buffer: Buffer; size: number };
@@ -49,7 +53,12 @@ export class TecidoService {
 
   async savePhoto(file?: TecidoUpload): Promise<string | undefined> {
     if (!file) return undefined;
-    if (file.size > MAX_SIZE || file.buffer.length > MAX_SIZE) throw new PayloadTooLargeException();
+    if (
+      file.size > MAX_CATALOG_UPLOAD_SIZE ||
+      file.buffer.length > MAX_CATALOG_UPLOAD_SIZE
+    ) {
+      throw new PayloadTooLargeException();
+    }
     const extension = detectedType(file.buffer);
     if (!extension) throw new UnsupportedMediaTypeException('Foto deve ser JPG, PNG ou WebP');
     const filename = `${randomUUID()}.${extension}`;
@@ -70,7 +79,7 @@ export class TecidoService {
 
   async get(id: string) { return this.project(await this.find(id), true); }
 
-  async create(data: Record<string, unknown>, file?: TecidoUpload) {
+  async create(data: CreateTecidoBodyDto, file?: TecidoUpload) {
     const nome = this.normalizeName(data.nome);
     const precoMetro = amount(data.preco_metro, 'preco_metro');
     const quantidadeM = amount(data.quantidade, 'quantidade');
@@ -80,12 +89,12 @@ export class TecidoService {
       const tecido = this.repo.create({ nome, foto: foto!, precoMetro, quantidadeM, desabilitado: false, excluido: false });
       return this.project(await this.repo.save(tecido), true);
     } catch (error) {
-      await unlink(join(directory(), foto!.split('/').pop()!)).catch(() => undefined);
+      await this.removeNewPhoto(foto!);
       throw error;
     }
   }
 
-  async update(id: string, data: Record<string, unknown>, file?: TecidoUpload) {
+  async update(id: string, data: PatchTecidoBodyDto, file?: TecidoUpload) {
     const tecido = await this.find(id);
     if (data.nome !== undefined) tecido.nome = this.normalizeName(data.nome);
     if (data.preco_metro !== undefined) tecido.precoMetro = amount(data.preco_metro, 'preco_metro');
@@ -95,7 +104,7 @@ export class TecidoService {
     let saved: Tecido;
     try { saved = await this.repo.save(tecido); }
     catch (error) {
-      if (photo) await unlink(join(directory(), photo.split('/').pop()!)).catch(() => undefined);
+      if (photo) await this.removeNewPhoto(photo);
       throw error;
     }
     if (photo && previousPhoto && previousPhoto !== photo) {
@@ -104,13 +113,13 @@ export class TecidoService {
     return this.project(saved, true);
   }
 
-  async updateQuantity(id: string, data: Record<string, unknown>) {
+  async updateQuantity(id: string, data: UpdateTecidoQuantidadeDto) {
     const tecido = await this.find(id);
     tecido.quantidadeM = amount(data.quantidade, 'quantidade');
     return this.project(await this.repo.save(tecido), true);
   }
 
-  async updateDisabled(id: string, data: Record<string, unknown>) {
+  async updateDisabled(id: string, data: UpdateTecidoDesabilitadoDto) {
     const tecido = await this.find(id);
     if (typeof data.desabilitado !== 'boolean') throw new BadRequestException('desabilitado inválido');
     tecido.desabilitado = data.desabilitado;
@@ -128,6 +137,21 @@ export class TecidoService {
     const nome = value.trim();
     if (!nome || nome.length > 100) throw new BadRequestException('nome inválido');
     return nome;
+  }
+
+  private async removeNewPhoto(photo: string): Promise<void> {
+    const filename = MANAGED_PHOTO_PATH.exec(photo)?.[1];
+    if (!filename) return;
+    try {
+      await unlink(join(directory(), filename));
+    } catch (error) {
+      if (errorCode(error) !== 'ENOENT') {
+        this.logger.warn(
+          'Não foi possível remover a foto nova após falha ao salvar',
+          errorDetails(error),
+        );
+      }
+    }
   }
 
   private async removeOldPhotoIfUnused(photo: string, tecidoId: string): Promise<void> {
