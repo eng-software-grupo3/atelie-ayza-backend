@@ -23,6 +23,6 @@ export class Endereco {
   @Column({ length: 20 })
   numero!: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 250, nullable: true })
   complemento!: string | null;
 }
