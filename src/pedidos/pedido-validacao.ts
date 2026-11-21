@@ -5,12 +5,9 @@ export const MAX_CONJUNTOS = 6;
 const MAX_ADERECOS_POR_PECA = 30;
 const MAX_OBSERVACAO = 500;
 
-const UFS = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA',
-  'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
+const SEM_NUMERO = /^s\/?n$/i;
 
 export type AderecoAplicadoValidado = {
   idAdereco: string;
@@ -33,12 +30,12 @@ export type ConjuntoValidado = {
 
 export type EnderecoValidado = {
   cep: string;
-  rua: string;
   numero: string;
   complemento: string | null;
-  bairro: string;
-  cidade: string;
-  estado: string;
+  /** Só vale quando o ViaCEP não traz a rua (CEP único da cidade). */
+  rua: string | null;
+  /** Só vale quando o ViaCEP não traz o bairro. */
+  bairro: string | null;
 };
 
 export type PedidoValidado = {
@@ -114,20 +111,18 @@ function coordenada(valor: unknown, campo: string): number {
   return valor;
 }
 
+// Cidade e estado não são lidos do corpo: vêm do ViaCEP (PedidosService).
 function endereco(valor: unknown): EnderecoValidado {
   const e = objeto(valor, 'endereco');
   const cepTexto = typeof e.cep === 'string' ? e.cep.trim() : '';
   if (!/^\d{5}-?\d{3}$/.test(cepTexto)) invalido('endereco.cep');
-  const uf = texto(e.estado, 'endereco.estado', 2).toUpperCase();
-  if (!UFS.includes(uf)) invalido('endereco.estado');
+  const numero = texto(e.numero, 'endereco.numero', 20);
   return {
     cep: cepTexto.replace('-', ''),
-    rua: texto(e.rua, 'endereco.rua', 150),
-    numero: texto(e.numero, 'endereco.numero', 20),
-    complemento: textoOpcional(e.complemento, 'endereco.complemento', 100),
-    bairro: texto(e.bairro, 'endereco.bairro', 100),
-    cidade: texto(e.cidade, 'endereco.cidade', 100),
-    estado: uf,
+    numero: SEM_NUMERO.test(numero) ? 'S/N' : numero,
+    complemento: textoOpcional(e.complemento, 'endereco.complemento', 250),
+    rua: textoOpcional(e.rua, 'endereco.rua', 150),
+    bairro: textoOpcional(e.bairro, 'endereco.bairro', 100),
   };
 }
 
@@ -165,7 +160,7 @@ function conjunto(valor: unknown, indice: number): ConjuntoValidado {
   };
 }
 
-// Valida e normaliza o corpo de POST /api/pedidos. Campos extras (preços, status) são ignorados.
+// Valida e normaliza o corpo de POST /api/pedidos. Campos extras (preços, status, cidade, estado) são ignorados.
 export function validarCriarPedido(corpo: unknown): PedidoValidado {
   const c = objeto(corpo, 'corpo');
   const modalidadeFrete = Object.values(ModalidadeFrete).find((m) => m === c.modalidade_frete);
