@@ -17,13 +17,9 @@ const conjuntoValido = () => ({
 });
 
 const enderecoValido = () => ({
-  cep: '58400-000',
-  rua: ' Rua das Flores ',
+  cep: '58400-100',
   numero: '10',
   complemento: '',
-  bairro: 'Centro',
-  cidade: 'Campina Grande',
-  estado: 'pb',
 });
 
 const corpoValido = () => ({
@@ -47,15 +43,7 @@ describe('validarCriarPedido', () => {
   it('normaliza um corpo válido', () => {
     expect(validarCriarPedido(corpoValido())).toEqual({
       telefone: '83999990000',
-      endereco: {
-        cep: '58400000',
-        rua: 'Rua das Flores',
-        numero: '10',
-        complemento: null,
-        bairro: 'Centro',
-        cidade: 'Campina Grande',
-        estado: 'PB',
-      },
+      endereco: { cep: '58400100', numero: '10', complemento: null, rua: null, bairro: null },
       modalidadeFrete: 'padrao',
       dataEntregaPrevista: '2026-11-27',
       conjuntos: [
@@ -78,11 +66,27 @@ describe('validarCriarPedido', () => {
     expect(validarCriarPedido(corpo).conjuntos).toHaveLength(6);
   });
 
-  it('ignora campos extras como preços e status', () => {
-    const corpo = { ...corpoValido(), preco_final: 1, status: 'concluido' };
+  it('ignora campos extras como preços, status, cidade e estado', () => {
+    const corpo = {
+      ...corpoValido(),
+      preco_final: 1,
+      status: 'concluido',
+      endereco: { ...enderecoValido(), cidade: 'Floriano', estado: 'PI' },
+    };
     const result = validarCriarPedido(corpo);
     expect(result).not.toHaveProperty('preco_final');
     expect(result).not.toHaveProperty('status');
+    expect(result.endereco).not.toHaveProperty('cidade');
+    expect(result.endereco).not.toHaveProperty('estado');
+  });
+
+  it('mantém rua e bairro enviados, sem espaços nas pontas', () => {
+    const corpo = comEndereco({ rua: ' Rua J ', bairro: ' Bom Lugar ' });
+    expect(validarCriarPedido(corpo).endereco).toMatchObject({ rua: 'Rua J', bairro: 'Bom Lugar' });
+  });
+
+  it.each(['s/n', 'S/N', 'sn'])('normaliza o número "%s" para S/N', (numero) => {
+    expect(validarCriarPedido(comEndereco({ numero })).endereco.numero).toBe('S/N');
   });
 
   it('lança BadRequestException com o nome do campo', () => {
@@ -96,11 +100,10 @@ describe('validarCriarPedido', () => {
     ['telefone com letras', { ...base, telefone: '83abc9999' }, 'telefone'],
     ['cep com 7 dígitos', comEndereco({ cep: '5840000' }), 'endereco.cep'],
     ['cep com letras', comEndereco({ cep: '5840A-000' }), 'endereco.cep'],
-    ['estado inexistente', comEndereco({ estado: 'XX' }), 'endereco.estado'],
-    ['estado com 3 letras', comEndereco({ estado: 'PBB' }), 'endereco.estado'],
-    ['rua vazia', comEndereco({ rua: '  ' }), 'endereco.rua'],
+    ['rua muito longa', comEndereco({ rua: 'x'.repeat(151) }), 'endereco.rua'],
+    ['bairro muito longo', comEndereco({ bairro: 'x'.repeat(101) }), 'endereco.bairro'],
     ['numero ausente', comEndereco({ numero: undefined }), 'endereco.numero'],
-    ['complemento muito longo', comEndereco({ complemento: 'x'.repeat(101) }), 'endereco.complemento'],
+    ['complemento muito longo', comEndereco({ complemento: 'x'.repeat(251) }), 'endereco.complemento'],
     ['modalidade inexistente', { ...base, modalidade_frete: 'retirada' }, 'modalidade_frete'],
     ['data inexistente', { ...base, data_entrega_prevista: '2026-02-30' }, 'data_entrega_prevista'],
     ['data em outro formato', { ...base, data_entrega_prevista: '27/11/2026' }, 'data_entrega_prevista'],

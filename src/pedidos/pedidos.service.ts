@@ -12,6 +12,7 @@ import { AgendaOcupado } from '../agenda/entities/agenda-ocupado.entity.js';
 import { Adereco } from '../catalogo/entities/adereco.entity.js';
 import { Modelo, ParteModelo } from '../catalogo/entities/modelo.entity.js';
 import { Tecido } from '../catalogo/entities/tecido.entity.js';
+import { CepService } from '../cep/cep.service.js';
 import { FreteService, type CotacaoFrete } from '../frete/frete.service.js';
 import { Endereco } from '../pessoas/entities/endereco.entity.js';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
@@ -21,13 +22,27 @@ import { ModalidadeFrete, StatusPedido } from './entities/enums.js';
 import { HistoricoStatus } from './entities/historico-status.entity.js';
 import { Peca } from './entities/peca.entity.js';
 import { Pedido } from './entities/pedido.entity.js';
-import { validarCriarPedido, type PedidoValidado } from './pedido-validacao.js';
+import {
+  validarCriarPedido,
+  type EnderecoValidado,
+  type PedidoValidado,
+} from './pedido-validacao.js';
 import { calcularPrecoPedido, type ConjuntoParaPreco, type PrecoPedido } from './preco-pedido.js';
 
 type Catalogo = {
   modelos: Map<string, Modelo>;
   tecidos: Map<string, Tecido>;
   aderecos: Map<string, Adereco>;
+};
+
+type EnderecoCompleto = {
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento: string | null;
+  bairro: string;
+  cidade: string;
+  estado: string;
 };
 
 export type PedidoCriado = {
@@ -52,12 +67,14 @@ export class PedidosService {
     private readonly dataSource: DataSource,
     private readonly frete: FreteService,
     private readonly config: ConfigService,
+    private readonly cep: CepService,
   ) {}
 
   async create(user: Usuario, corpo: unknown): Promise<PedidoCriado> {
     const pedido = validarCriarPedido(corpo);
-    // O frete é consultado fora da transação para não segurar uma conexão do banco.
-    const cotacao = await this.cotarFrete(pedido);
+    // As consultas externas (CEP e frete) ficam fora da transação para não segurar uma conexão do banco.
+    const endereco = await this.resolverEndereco(pedido.endereco);
+    const cotacao = await this.cotarFrete(pedido, endereco);
     const diasMinimos = this.prazoConfeccao() + cotacao.prazo_frete_dias;
 
     return this.dataSource.transaction(async (manager) => {
@@ -65,7 +82,7 @@ export class PedidosService {
       this.validarPartes(pedido, catalogo);
       await this.validarData(manager, pedido.dataEntregaPrevista, diasMinimos);
       const precos = calcularPrecoPedido(this.paraPreco(pedido, catalogo), cotacao.preco);
-      return this.gravar(manager, user, pedido, cotacao, precos, catalogo);
+      return this.gravar(manager, user, pedido, endereco, cotacao, precos, catalogo);
     });
   }
 
@@ -78,13 +95,32 @@ export class PedidosService {
     return dias;
   }
 
-  private async cotarFrete(pedido: PedidoValidado): Promise<CotacaoFrete> {
+  // Cidade e estado vêm sempre do ViaCEP: o que o cliente digitar não vale para o frete.
+  // Rua e bairro também vêm dele, e só são exigidos do cliente quando o ViaCEP não os traz.
+  private async resolverEndereco(enviado: EnderecoValidado): Promise<EnderecoCompleto> {
+    const viacep = await this.cep.consultar(enviado.cep);
+    const rua = viacep.logradouro ?? enviado.rua;
+    const bairro = viacep.bairro ?? enviado.bairro;
+    if (!rua) throw new BadRequestException('endereco.rua obrigatório para este CEP');
+    if (!bairro) throw new BadRequestException('endereco.bairro obrigatório para este CEP');
+    return {
+      cep: viacep.cep,
+      rua: rua.slice(0, 150),
+      numero: enviado.numero,
+      complemento: enviado.complemento,
+      bairro: bairro.slice(0, 100),
+      cidade: viacep.cidade.slice(0, 100),
+      estado: viacep.estado,
+    };
+  }
+
+  private async cotarFrete(pedido: PedidoValidado, endereco: EnderecoCompleto): Promise<CotacaoFrete> {
     let cotacoes: CotacaoFrete[];
     try {
       cotacoes = await this.frete.cotar({
-        cep: pedido.endereco.cep,
-        cidade: pedido.endereco.cidade,
-        estado: pedido.endereco.estado,
+        cep: endereco.cep,
+        cidade: endereco.cidade,
+        estado: endereco.estado,
         conjuntos: pedido.conjuntos.length,
       });
     } catch (error) {
@@ -186,11 +222,12 @@ export class PedidosService {
     manager: EntityManager,
     user: Usuario,
     pedido: PedidoValidado,
+    enderecoCompleto: EnderecoCompleto,
     cotacao: CotacaoFrete,
     precos: PrecoPedido,
     catalogo: Catalogo,
   ): Promise<PedidoCriado> {
-    const endereco = await manager.save(Endereco, { ...pedido.endereco });
+    const endereco = await manager.save(Endereco, { ...enderecoCompleto });
     const salvo = await manager.save(Pedido, {
       cliente: user,
       endereco,
