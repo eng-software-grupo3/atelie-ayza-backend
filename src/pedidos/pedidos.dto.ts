@@ -87,3 +87,78 @@ export class PedidoCriadoDto {
   @ApiProperty({ type: ConjuntoCriadoDto, isArray: true })
   conjuntos!: ConjuntoCriadoDto[];
 }
+
+export class PedidoListaDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+  @ApiProperty({ type: Number })
+  num_pedido!: number;
+  @ApiProperty({ enum: StatusPedido })
+  status!: StatusPedido;
+  @ApiProperty({ type: String, format: 'date-time' })
+  data_pedido!: Date;
+  @ApiProperty({ type: String, format: 'date' })
+  data_entrega_prevista!: string;
+  @ApiProperty({ type: Number, nullable: true })
+  preco_final!: number | null;
+  @ApiProperty({ type: Number })
+  preco_frete!: number;
+  @ApiProperty({ enum: ModalidadeFrete })
+  modalidade_frete!: ModalidadeFrete;
+  @ApiProperty({ type: Number, nullable: true })
+  valor_parcela_1!: number | null;
+  @ApiProperty({ type: Number, nullable: true })
+  valor_parcela_2!: number | null;
+  @ApiProperty({ type: String, nullable: true })
+  motivo_recusa_cancelamento!: string | null;
+}
+
+export class EnderecoDetalhePedidoDto {
+  @ApiProperty() rua!: string;
+  @ApiProperty() numero!: string;
+  @ApiProperty({ type: String, nullable: true }) complemento!: string | null;
+  @ApiProperty() bairro!: string;
+  @ApiProperty() cidade!: string;
+  @ApiProperty() estado!: string;
+  @ApiProperty() cep!: string;
+}
+
+export class AderecoDetalhePedidoDto {
+  @ApiProperty({ format: 'uuid' }) id_adereco!: string;
+  @ApiProperty() nome!: string;
+  @ApiProperty({ type: Number }) coordenada_x!: number;
+  @ApiProperty({ type: Number }) coordenada_y!: number;
+}
+
+export class PecaDetalhePedidoDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) id_modelo!: string;
+  @ApiProperty() modelo!: string;
+  @ApiProperty({ enum: ['CIMA', 'BAIXO'] }) parte!: string;
+  @ApiProperty({ enum: Tamanho }) tamanho!: Tamanho;
+  @ApiProperty({ type: AderecoDetalhePedidoDto, isArray: true }) aderecos!: AderecoDetalhePedidoDto[];
+}
+
+export class ConjuntoDetalhePedidoDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) id_tecido!: string;
+  @ApiProperty() tecido!: string;
+  @ApiProperty({ type: Number }) preco!: number;
+  @ApiProperty({ type: String, nullable: true }) observacao!: string | null;
+  @ApiProperty({ type: String, nullable: true }) foto_cliente!: string | null;
+  @ApiProperty({ type: PecaDetalhePedidoDto }) cima!: PecaDetalhePedidoDto;
+  @ApiProperty({ type: PecaDetalhePedidoDto }) baixo!: PecaDetalhePedidoDto;
+}
+
+export class HistoricoPedidoDto {
+  @ApiProperty({ enum: StatusPedido }) status!: StatusPedido;
+  @ApiProperty({ type: String, format: 'date-time' }) data_mudanca!: Date;
+  @ApiProperty({ type: String, nullable: true }) motivo!: string | null;
+}
+
+export class PedidoDetalheDto extends PedidoListaDto {
+  @ApiProperty({ type: EnderecoDetalhePedidoDto }) endereco!: EnderecoDetalhePedidoDto;
+  @ApiProperty({ type: Number }) prazo_frete_dias!: number;
+  @ApiProperty({ type: ConjuntoDetalhePedidoDto, isArray: true }) conjuntos!: ConjuntoDetalhePedidoDto[];
+  @ApiProperty({ type: HistoricoPedidoDto, isArray: true }) historico!: HistoricoPedidoDto[];
+}
