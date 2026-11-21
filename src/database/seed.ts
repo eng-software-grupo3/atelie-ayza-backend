@@ -184,21 +184,20 @@ async function main(): Promise<void> {
     // Adereços fictícios
     const aderecosDir =
       process.env.ADERECOS_UPLOAD_DIR || join(process.cwd(), 'uploads/aderecos');
-    const aderecos: Array<[string, string, number, number, number]> = [
-      ['Pérola', 'Pedraria', 50, 2, 10],
-      ['Strass', 'Pedraria', 80, 1.5, 15],
-      ['Argola Dourada', 'Argola', 30, 4, 6],
-      ['Laço de Cetim', 'Laço', 20, 3, 5],
+    const aderecos: Array<[string, number, number, number]> = [
+      ['Pérola', 50, 2, 10],
+      ['Strass', 80, 1.5, 15],
+      ['Argola Dourada', 30, 4, 6],
+      ['Laço de Cetim', 20, 3, 5],
     ];
     const aderecoRepo = ds.getRepository(Adereco);
-    for (const [nome, tipo, quantidade, preco, estoqueMinimo] of aderecos) {
+    for (const [nome, quantidade, preco, estoqueMinimo] of aderecos) {
       const foto = await seedPhoto('aderecos', aderecosDir, nome);
       const adereco = await ensure(
         aderecoRepo,
         { nome },
         {
           nome,
-          tipo,
           foto,
           quantidade,
           preco,

@@ -45,7 +45,8 @@ describe('AderecoService', () => {
     );
     expect(result).toMatchObject({ id: 'server-id', preco: 12.5, quantidade: 4, desabilitado: false });
     expect(result.nome).toBe('Laço');
-    expect(rows[0]).toMatchObject({ tipo: 'adereço', estoqueMinimo: 0, excluido: false });
+    expect(rows[0]).toMatchObject({ estoqueMinimo: 0, excluido: false });
+    expect(rows[0]).not.toHaveProperty('tipo');
     expect(await service.list(false)).toEqual([{ id: 'server-id', nome: 'Laço', foto: rows[0].foto, preco: 12.5 }]);
     rows[0].desabilitado = true;
     await service.update(

@@ -150,7 +150,6 @@ export class AderecoService {
         foto: foto!,
         preco,
         quantidade: quantidadeValue,
-        tipo: 'adereço',
         estoqueMinimo: 0,
         desabilitado: false,
         excluido: false,

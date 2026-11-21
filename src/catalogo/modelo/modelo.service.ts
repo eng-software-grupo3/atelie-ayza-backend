@@ -126,7 +126,11 @@ export class ModeloService {
     await this.repo.save(modelo);
   }
 
-  async setHabilitado(id: string, habilitado: boolean): Promise<ModeloManagementDto> {
+  async setHabilitado(id: string, habilitado: unknown): Promise<ModeloManagementDto> {
+    if (typeof habilitado !== 'boolean') {
+      throw new BadRequestException('habilitado inválido');
+    }
+
     const modelo = await this.find(id);
 
     modelo.habilitado = habilitado;

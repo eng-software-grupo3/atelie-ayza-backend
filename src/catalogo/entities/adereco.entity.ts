@@ -11,10 +11,6 @@ export class Adereco {
   @Column({ length: 100 })
   nome!: string;
 
-  // tipo livre (ex.: pedraria, argola, laço), digitado pela gestora
-  @Column({ length: 60 })
-  tipo!: string;
-
   @Column({ type: 'text', nullable: true })
   foto!: string | null;
 

@@ -228,6 +228,17 @@ describe('ModeloService', () => {
     expect(rows[0].habilitado).toBe(true);
   });
 
+  it('rejects non-boolean habilitado values without saving', async () => {
+    await service.create(validData);
+
+    await expect(service.setHabilitado(ID, 'false')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+
+    expect(rows[0].habilitado).toBe(true);
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+
   it('does not change habilitado when updating other fields', async () => {
     await service.create(validData);
 
