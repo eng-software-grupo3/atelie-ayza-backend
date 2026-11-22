@@ -109,6 +109,27 @@ describe('CepService', () => {
     );
   });
 
+  it.each(['', 'P', 'PIA', 'Piauí', 'XX', 27])(
+    'resposta com UF inválida "%s" devolve 503',
+    async (uf) => {
+      fetchMock.mockResolvedValue(
+        resposta({ localidade: 'Campina Grande', uf }),
+      );
+      await expect(new CepService().consultar('58400000')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    },
+  );
+
+  it('normaliza uma UF válida para maiúsculas', async () => {
+    fetchMock.mockResolvedValue(
+      resposta({ localidade: 'Campina Grande', uf: 'pb' }),
+    );
+    await expect(new CepService().consultar('58400000')).resolves.toMatchObject({
+      estado: 'PB',
+    });
+  });
+
   it('reaproveita o cache na segunda consulta do mesmo CEP', async () => {
     fetchMock.mockResolvedValue(resposta(campina));
     const service = new CepService();

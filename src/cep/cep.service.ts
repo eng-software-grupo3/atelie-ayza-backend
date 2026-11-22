@@ -19,6 +19,35 @@ const TIMEOUT_MS = 3000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX = 500;
 const CEP = /^\d{5}-?\d{3}$/;
+const UFS = new Set([
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
+]);
 
 type RespostaViaCep = {
   erro?: boolean | string;
@@ -56,9 +85,10 @@ export class CepService {
       throw new BadRequestException('CEP não encontrado');
     }
     const cidade = textoOuNulo(dados.localidade);
-    const estado = textoOuNulo(dados.uf);
-    if (!cidade || !estado) {
-      this.logger.warn(`ViaCEP devolveu o CEP ${cep} sem cidade ou UF`);
+    const estadoInformado = textoOuNulo(dados.uf);
+    const estado = estadoInformado?.toUpperCase();
+    if (!cidade || !estado || !UFS.has(estado)) {
+      this.logger.warn(`ViaCEP devolveu o CEP ${cep} com cidade ou UF inválida`);
       throw indisponivel();
     }
 
