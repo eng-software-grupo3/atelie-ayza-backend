@@ -63,7 +63,6 @@ Todas as FKs usam `onDelete: 'RESTRICT'`.
 ## 9. Regras de domínio já decididas
 
 - Tecido em **metros lineares do rolo** (`quantidade_m`, `preco_metro`); `metragem_media_m` do modelo na mesma unidade.
-- Adereço tem `tipo` como **string livre** (sem enum e sem tabela de categoria), digitado pela gestora. Normalizar com trim e minúsculas no back, para "Pedraria" e "pedraria" não virarem tipos diferentes.
 - Adereço aplicado: **uma linha em `adereco_peca` por unidade**, com coordenadas em **proporção da imagem (0 a 1)**. A quantidade é a contagem de linhas.
 - `num_pedido` é sequencial e único (o que a cliente cita no WhatsApp); o `id` é UUID.
 - Mudança de status grava uma linha em `historico_status`; mudança de estoque grava em `movimentacao_estoque` (exatamente um entre tecido e adereço).
