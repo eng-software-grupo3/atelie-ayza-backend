@@ -5,6 +5,10 @@ export class DiaDisponivelDto {
   data!: string;
   @ApiProperty({ type: Boolean })
   disponivel!: boolean;
+  @ApiProperty({
+  type: Boolean,
+  description: 'true só quando a gestora bloqueou a data, mesmo que ela esteja antes da data mínima',})
+  bloqueada!: boolean;
 }
 
 export class DatasDisponiveisDto {
