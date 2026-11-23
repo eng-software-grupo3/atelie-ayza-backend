@@ -25,17 +25,25 @@ const tecido = { id: ID_TECIDO, precoMetro: 35 };
 const adereco = { id: ID_ADERECO, preco: 2 };
 const cotacoes = [{ modalidade: ModalidadeFrete.PADRAO, preco: 29.67, prazo_frete_dias: 7 }];
 
+const viacepCampina = {
+  cep: '58400100',
+  logradouro: 'Rua Maciel Pinheiro',
+  bairro: 'Centro',
+  cidade: 'Campina Grande',
+  estado: 'PB',
+};
+// CEP único da cidade: o ViaCEP não traz rua nem bairro.
+const viacepUnico = {
+  cep: '12345000',
+  logradouro: null,
+  bairro: null,
+  cidade: 'Cidadezinha',
+  estado: 'PI',
+};
+
 const corpo = () => ({
   telefone: '83999990000',
-  endereco: {
-    cep: '58400000',
-    rua: 'Rua das Flores',
-    numero: '10',
-    complemento: null,
-    bairro: 'Centro',
-    cidade: 'Campina Grande',
-    estado: 'PB',
-  },
+  endereco: { cep: '58400-100', numero: '10', complemento: null },
   modalidade_frete: 'padrao',
   data_entrega_prevista: '2026-11-27',
   conjuntos: [
@@ -52,12 +60,19 @@ const corpo = () => ({
   ],
 });
 
+const comEndereco = (alteracao: object) => ({
+  ...corpo(),
+  endereco: { ...corpo().endereco, ...alteracao },
+});
+
 type Opcoes = {
   minima?: string;
   bloqueada?: boolean;
   modelos?: object[];
   tecidos?: object[];
   aderecos?: object[];
+  viacep?: object;
+  cepErro?: Error;
   cotar?: () => Promise<unknown>;
 };
 
@@ -68,6 +83,7 @@ function setup(opcoes: Opcoes = {}) {
     modelos = [modeloCima, modeloBaixo],
     tecidos = [tecido],
     aderecos = [adereco],
+    viacep = viacepCampina,
   } = opcoes;
   const salvos: Array<{ entidade: unknown; dados: unknown }> = [];
   let sequencia = 0;
@@ -92,8 +108,14 @@ function setup(opcoes: Opcoes = {}) {
   };
   const frete = { cotar: vi.fn(opcoes.cotar ?? (async () => cotacoes)) };
   const config = { get: vi.fn(() => '3') };
-  const service = new PedidosService(dataSource as never, frete as never, config as never);
-  return { service, manager, dataSource, frete, salvos };
+  const cep = {
+    consultar: vi.fn(async () => {
+      if (opcoes.cepErro) throw opcoes.cepErro;
+      return viacep;
+    }),
+  };
+  const service = new PedidosService(dataSource as never, frete as never, config as never, cep as never);
+  return { service, manager, dataSource, frete, cep, salvos };
 }
 
 const criar = (service: PedidosService, dados: unknown = corpo()) =>
@@ -125,7 +147,7 @@ describe('PedidosService.create', () => {
       conjuntos: [{ id: expect.any(String), preco: 110 }],
     });
     expect(frete.cotar).toHaveBeenCalledWith({
-      cep: '58400000',
+      cep: '58400100',
       cidade: 'Campina Grande',
       estado: 'PB',
       conjuntos: 1,
@@ -148,6 +170,77 @@ describe('PedidosService.create', () => {
       expect.objectContaining({ coordenadaX: '0.2500', coordenadaY: '0.4000' }),
     ]);
     expect(salvos[6].dados).toMatchObject({ status: 'em_analise', motivo: null });
+  });
+
+  it('grava o endereço com os dados do ViaCEP', async () => {
+    const { service, salvos, cep } = setup();
+    await criar(service);
+    expect(cep.consultar).toHaveBeenCalledWith('58400100');
+    expect(salvos[0].entidade).toBe(Endereco);
+    expect(salvos[0].dados).toEqual({
+      cep: '58400100',
+      rua: 'Rua Maciel Pinheiro',
+      numero: '10',
+      complemento: null,
+      bairro: 'Centro',
+      cidade: 'Campina Grande',
+      estado: 'PB',
+    });
+  });
+
+  it('usa a cidade e o estado do ViaCEP, e não os enviados pelo cliente', async () => {
+    const { service, salvos, frete } = setup();
+    await criar(service, comEndereco({ cidade: 'Floriano', estado: 'PI' }));
+    expect(frete.cotar).toHaveBeenCalledWith(
+      expect.objectContaining({ cidade: 'Campina Grande', estado: 'PB' }),
+    );
+    expect(salvos[0].dados).toMatchObject({ cidade: 'Campina Grande', estado: 'PB' });
+  });
+
+  it('a rua e o bairro do ViaCEP prevalecem sobre os enviados', async () => {
+    const { service, salvos } = setup();
+    await criar(service, comEndereco({ rua: 'Outra Rua', bairro: 'Outro Bairro' }));
+    expect(salvos[0].dados).toMatchObject({ rua: 'Rua Maciel Pinheiro', bairro: 'Centro' });
+  });
+
+  it('CEP único: usa a rua e o bairro enviados quando o ViaCEP não os traz', async () => {
+    const { service, salvos, frete } = setup({ viacep: viacepUnico });
+    await criar(service, comEndereco({ cep: '12345-000', rua: 'Rua J', bairro: 'Bom Lugar' }));
+    expect(salvos[0].dados).toMatchObject({
+      rua: 'Rua J',
+      bairro: 'Bom Lugar',
+      cidade: 'Cidadezinha',
+      estado: 'PI',
+    });
+    expect(frete.cotar).toHaveBeenCalledWith(expect.objectContaining({ estado: 'PI' }));
+  });
+
+  it.each([
+    ['rua', { bairro: 'Bom Lugar' }],
+    ['bairro', { rua: 'Rua J' }],
+  ])('CEP único sem %s enviado devolve 400 antes de cotar o frete', async (campo, enviados) => {
+    const { service, frete, dataSource } = setup({ viacep: viacepUnico });
+    await expect(criar(service, comEndereco({ cep: '12345-000', ...enviados }))).rejects.toThrow(
+      `endereco.${campo} obrigatório para este CEP`,
+    );
+    expect(frete.cotar).not.toHaveBeenCalled();
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('CEP inexistente devolve 400 sem cotar o frete', async () => {
+    const { service, frete, dataSource } = setup({
+      cepErro: new BadRequestException('CEP não encontrado'),
+    });
+    await expect(criar(service)).rejects.toThrow('CEP não encontrado');
+    expect(frete.cotar).not.toHaveBeenCalled();
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('serviço de CEP indisponível devolve 503', async () => {
+    const { service } = setup({
+      cepErro: new ServiceUnavailableException('Serviço de CEP indisponível'),
+    });
+    await expect(criar(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('ignora preços enviados pelo cliente', async () => {
@@ -223,9 +316,10 @@ describe('PedidosService.create', () => {
     await expect(criar(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('rejeita corpo inválido sem consultar o frete', async () => {
-    const { service, frete } = setup();
+  it('rejeita corpo inválido sem consultar o CEP nem o frete', async () => {
+    const { service, frete, cep } = setup();
     await expect(criar(service, {})).rejects.toBeInstanceOf(BadRequestException);
+    expect(cep.consultar).not.toHaveBeenCalled();
     expect(frete.cotar).not.toHaveBeenCalled();
   });
 });

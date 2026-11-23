@@ -31,20 +31,16 @@ export class ConjuntoPedidoDto {
 }
 
 export class EnderecoPedidoDto {
-  @ApiProperty({ example: '58400000', description: '8 dígitos, hífen aceito' })
+  @ApiProperty({ example: '58400100', description: '8 dígitos, hífen aceito. Cidade e estado vêm do ViaCEP' })
   cep!: string;
-  @ApiProperty({ maxLength: 150 })
-  rua!: string;
-  @ApiProperty({ maxLength: 20 })
+  @ApiProperty({ example: '10', maxLength: 20, description: 'Use S/N para endereço sem número' })
   numero!: string;
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 250 })
   complemento?: string | null;
-  @ApiProperty({ maxLength: 100 })
-  bairro!: string;
-  @ApiProperty({ maxLength: 100 })
-  cidade!: string;
-  @ApiProperty({ example: 'PB', description: 'UF' })
-  estado!: string;
+  @ApiPropertyOptional({ maxLength: 150, description: 'Obrigatória só quando o ViaCEP não traz a rua (CEP único da cidade)' })
+  rua?: string;
+  @ApiPropertyOptional({ maxLength: 100, description: 'Obrigatório só quando o ViaCEP não traz o bairro' })
+  bairro?: string;
 }
 
 export class CriarPedidoDto {
