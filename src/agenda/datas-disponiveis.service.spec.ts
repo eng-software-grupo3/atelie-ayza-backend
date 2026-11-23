@@ -41,6 +41,17 @@ describe('DatasDisponiveisService', () => {
     expect(dia('2026-12-11')).toBe(true);
   });
 
+  it('bloqueada só é verdadeira quando a gestora bloqueou, mesmo antes da data mínima', async () => {
+    const { service } = setup({ minima: '2026-12-05', bloqueadas: ['2026-12-02', '2026-12-10'] });
+    const result = await service.listar('2026-12', '7');
+    const dia = (data: string) => result.dias.find((d) => d.data === data);
+
+    expect(dia('2026-12-02')).toEqual({ data: '2026-12-02', disponivel: false, bloqueada: true });
+    expect(dia('2026-12-03')).toEqual({ data: '2026-12-03', disponivel: false, bloqueada: false });
+    expect(dia('2026-12-10')).toEqual({ data: '2026-12-10', disponivel: false, bloqueada: true });
+    expect(dia('2026-12-11')).toEqual({ data: '2026-12-11', disponivel: true, bloqueada: false });
+  });
+
   it('mês inteiro antes da data mínima: nenhum dia disponível', async () => {
     const { service } = setup({ minima: '2026-12-05' });
     const result = await service.listar('2026-11', '7');
