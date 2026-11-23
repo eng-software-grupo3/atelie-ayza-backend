@@ -1,16 +1,32 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { PedidosService } from './pedidos.service.js';
 
 const cliente = { id: 'cliente-1' };
 
-function serviceWithRepository(repository: {
+function serviceWithRepository(
+  repository: {
   find: ReturnType<typeof vi.fn>;
   findOne: ReturnType<typeof vi.fn>;
   findAndCount?: ReturnType<typeof vi.fn>;
-}) {
-  const dataSource = { getRepository: vi.fn(() => repository) };
-  return { service: new PedidosService(dataSource as never, {} as never, {} as never, {} as never), dataSource };
+  },
+  options: { estoque?: unknown; manager?: unknown } = {},
+) {
+  const manager = options.manager ?? {};
+  const dataSource = {
+    getRepository: vi.fn(() => repository),
+    transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(manager)),
+  };
+  return {
+    service: new PedidosService(
+      dataSource as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      options.estoque as never,
+    ),
+    dataSource,
+  };
 }
 
 describe('PedidosService consultas do cliente', () => {
@@ -305,5 +321,166 @@ describe('PedidosService consultas do cliente', () => {
         { status: 'em_producao', data_mudanca: atual },
       ],
     });
+  });
+
+  it('recusa pedido em analise e registra o historico sem estoque', async () => {
+    const pedido = {
+      id: 'pedido-1',
+      status: 'em_analise',
+      precoFinal: null,
+      valorParcela1: null,
+      valorParcela2: null,
+      motivoRecusaCancelamento: null,
+    };
+    const saved: unknown[] = [];
+    const manager = {
+      findOne: vi.fn().mockResolvedValue(pedido),
+      save: vi.fn(async (_entidade: unknown, dados: unknown) => {
+        saved.push(dados);
+        return dados;
+      }),
+    };
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository, { manager });
+
+    await expect(service.recusarPedido('pedido-1', { motivo: 'Fora do prazo' }))
+      .resolves.toMatchObject({
+        id: 'pedido-1',
+        status: 'recusado',
+        motivo_recusa_cancelamento: 'Fora do prazo',
+      });
+    expect(saved).toContainEqual(expect.objectContaining({ status: 'recusado', motivoRecusaCancelamento: 'Fora do prazo' }));
+  });
+
+  it('exige parcela cuja soma seja igual ao preco final', async () => {
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.aceitarPedido('pedido-1', {
+      preco_final: 100,
+      valor_parcela_1: 40,
+      valor_parcela_2: 40,
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejeita preco final ou parcelas negativas', async () => {
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.aceitarPedido('pedido-1', {
+      preco_final: -100,
+      valor_parcela_1: -50,
+      valor_parcela_2: -50,
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('aceita apenas pedido em analise e bloqueia transicoes invalidas', async () => {
+    const pedido = {
+      id: 'pedido-1',
+      status: 'recusado',
+      precoFinal: null,
+      valorParcela1: null,
+      valorParcela2: null,
+      motivoRecusaCancelamento: null,
+      conjuntos: [],
+    };
+    const manager = {
+      findOne: vi.fn().mockResolvedValue(pedido),
+      save: vi.fn(),
+    };
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const estoque = { baixarPedido: vi.fn() };
+    const { service } = serviceWithRepository(repository, { manager, estoque });
+
+    await expect(service.aceitarPedido('pedido-1', {
+      preco_final: 100,
+      valor_parcela_1: 60,
+      valor_parcela_2: 40,
+    })).rejects.toBeInstanceOf(ConflictException);
+    expect(estoque.baixarPedido).not.toHaveBeenCalled();
+  });
+
+  it('aceita pedido em analise, atualiza valores e registra o historico', async () => {
+    const pedido = {
+      id: 'pedido-1',
+      status: 'em_analise',
+      precoFinal: null,
+      valorParcela1: null,
+      valorParcela2: null,
+      motivoRecusaCancelamento: null,
+      conjuntos: [],
+    };
+    const saved: Array<{ entidade: unknown; dados: unknown }> = [];
+    const manager = {
+      findOne: vi
+        .fn()
+        .mockResolvedValueOnce(pedido)
+        .mockResolvedValueOnce(pedido),
+      save: vi.fn(async (entidade: unknown, dados: unknown) => {
+        saved.push({ entidade, dados });
+        return dados;
+      }),
+    };
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const estoque = { baixarPedido: vi.fn().mockResolvedValue(undefined) };
+    const { service } = serviceWithRepository(repository, { manager, estoque });
+
+    await expect(service.aceitarPedido('pedido-1', {
+      preco_final: 100,
+      valor_parcela_1: 60,
+      valor_parcela_2: 40,
+    })).resolves.toMatchObject({
+      id: 'pedido-1',
+      status: 'esperando_1_pag',
+      preco_final: 100,
+      valor_parcela_1: 60,
+      valor_parcela_2: 40,
+    });
+    expect(estoque.baixarPedido).toHaveBeenCalledTimes(1);
+    expect(saved).toContainEqual(expect.objectContaining({
+      dados: expect.objectContaining({
+        status: 'esperando_1_pag',
+        precoFinal: 100,
+        valorParcela1: 60,
+        valorParcela2: 40,
+      }),
+    }));
+  });
+
+  it('faz rollback sem baixar estoque quando a transacao falha', async () => {
+    const pedido = {
+      id: 'pedido-1',
+      status: 'em_analise',
+      precoFinal: null,
+      valorParcela1: null,
+      valorParcela2: null,
+      motivoRecusaCancelamento: null,
+      conjuntos: [],
+    };
+    const estoque = { baixarPedido: vi.fn().mockRejectedValue(new Error('falha no estoque')) };
+    const manager = {
+      findOne: vi
+        .fn()
+        .mockResolvedValueOnce(pedido)
+        .mockResolvedValueOnce(pedido),
+      save: vi.fn(),
+    };
+    const dataSource = {
+      transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(manager)),
+    };
+    const service = new PedidosService(
+      dataSource as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      estoque as never,
+    );
+
+    await expect(service.aceitarPedido('pedido-1', {
+      preco_final: 100,
+      valor_parcela_1: 60,
+      valor_parcela_2: 40,
+    })).rejects.toThrow('falha no estoque');
+    expect(manager.save).not.toHaveBeenCalled();
   });
 });

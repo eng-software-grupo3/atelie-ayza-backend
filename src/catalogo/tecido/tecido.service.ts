@@ -41,7 +41,10 @@ function amount(value: unknown, field: string): number {
     throw new BadRequestException(`${field} inválido`);
   }
   const text = String(value);
-  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) throw new BadRequestException(`${field} inválido`);
+  const pattern = field === 'quantidade'
+    ? /^-?\d{1,8}(?:\.\d{1,2})?$/
+    : /^\d{1,8}(?:\.\d{1,2})?$/;
+  if (!pattern.test(text)) throw new BadRequestException(`${field} inválido`);
   return Number(text);
 }
 

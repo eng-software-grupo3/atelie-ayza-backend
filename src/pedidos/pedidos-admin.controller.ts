@@ -1,7 +1,8 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
+  ApiBody,
   ApiParam,
   ApiProduces,
   ApiQuery,
@@ -11,8 +12,11 @@ import {
 import { AdminGuard, JwtAuthGuard } from '../auth/auth.guards.js';
 import { StatusPedido } from './entities/enums.js';
 import {
+  AceitarPedidoDto,
   PedidoGestaoDetalheDto,
   PedidoGestaoPaginaDto,
+  PedidoAcaoDto,
+  RecusarPedidoDto,
 } from './pedidos.dto.js';
 import { PedidosService } from './pedidos.service.js';
 
@@ -48,5 +52,27 @@ export class PedidosAdminController {
   @ApiResponse({ status: 404, description: 'Pedido não encontrado' })
   obterDetalhe(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.service.obterDetalheGestao(id);
+  }
+
+  @Patch(':id/aceitar')
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: AceitarPedidoDto })
+  @ApiOkResponse({ type: PedidoAcaoDto })
+  @ApiResponse({ status: 400, description: 'Dados financeiros inválidos' })
+  @ApiResponse({ status: 404, description: 'Pedido não encontrado' })
+  @ApiResponse({ status: 409, description: 'Transição inválida ou item do pedido inexistente no catálogo' })
+  aceitar(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: AceitarPedidoDto) {
+    return this.service.aceitarPedido(id, body);
+  }
+
+  @Patch(':id/recusar')
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: RecusarPedidoDto })
+  @ApiOkResponse({ type: PedidoAcaoDto })
+  @ApiResponse({ status: 400, description: 'Motivo inválido' })
+  @ApiResponse({ status: 404, description: 'Pedido não encontrado' })
+  @ApiResponse({ status: 409, description: 'Transição inválida' })
+  recusar(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: RecusarPedidoDto) {
+    return this.service.recusarPedido(id, body);
   }
 }

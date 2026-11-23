@@ -2,7 +2,6 @@ import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { decimalTransformer } from '../../database/decimal.transformer.js';
 
 @Entity('tecido')
-@Check('"quantidade_m" >= 0')
 @Check('"preco_metro" >= 0')
 export class Tecido {
   @PrimaryGeneratedColumn('uuid')

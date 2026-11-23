@@ -85,7 +85,6 @@ describe('TecidoService', () => {
     [{ nome: 'x', preco_metro: '1.001', quantidade: '1' }],
     [{ nome: 'x', preco_metro: '1', quantidade: '100000000' }],
     [{ nome: 'x', preco_metro: '100000000', quantidade: '1' }],
-    [{ nome: 'x', preco_metro: '1', quantidade: '-0.01' }],
   ])('rejects invalid create payloads', async (payload) => {
     const upload = payload.nome === 'x' && payload.quantidade === '1' ? undefined : file();
     await expect(service.create(payload, upload)).rejects.toBeInstanceOf(BadRequestException);
@@ -180,6 +179,7 @@ describe('TecidoService', () => {
     await service.create({ nome: 'A', preco_metro: '1', quantidade: '2.25' }, file());
     const row = rows[0];
     expect((await service.updateQuantity(row.id, { quantidade: '4.50' })).quantidade).toBe(4.5);
+    expect((await service.updateQuantity(row.id, { quantidade: '-0.50' })).quantidade).toBe(-0.5);
     expect((await service.updateDisabled(row.id, { desabilitado: true })).desabilitado).toBe(true);
     await expect(service.updateQuantity(row.id, { quantidade: '1.234' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.updateDisabled(row.id, { desabilitado: 'false' })).rejects.toBeInstanceOf(BadRequestException);

@@ -114,7 +114,14 @@ function setup(opcoes: Opcoes = {}) {
       return viacep;
     }),
   };
-  const service = new PedidosService(dataSource as never, frete as never, config as never, cep as never);
+  const estoque = { baixarPedido: vi.fn() };
+  const service = new PedidosService(
+    dataSource as never,
+    frete as never,
+    config as never,
+    cep as never,
+    estoque as never,
+  );
   return { service, manager, dataSource, frete, cep, salvos };
 }
 
