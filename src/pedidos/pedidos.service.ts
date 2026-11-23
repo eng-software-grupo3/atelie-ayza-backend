@@ -4,6 +4,7 @@ import {
   HttpException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -69,6 +70,97 @@ export class PedidosService {
     private readonly config: ConfigService,
     private readonly cep: CepService,
   ) {}
+
+  async listar(user: Usuario): Promise<PedidoListaDto[]> {
+    const pedidos = await this.dataSource.getRepository(Pedido).find({
+      where: { cliente: { id: user.id } },
+      order: { dataPedido: 'DESC', numPedido: 'DESC' },
+    });
+    return pedidos.map((pedido) => ({
+      id: pedido.id,
+      num_pedido: pedido.numPedido,
+      status: pedido.status,
+      data_pedido: pedido.dataPedido,
+      data_entrega_prevista: pedido.dataEntregaPrevista,
+      preco_final: pedido.precoFinal,
+      preco_frete: pedido.precoFrete,
+      modalidade_frete: pedido.modalidadeFrete,
+      valor_parcela_1: pedido.valorParcela1,
+      valor_parcela_2: pedido.valorParcela2,
+      motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
+    }));
+  }
+
+  async obterDetalhe(user: Usuario, id: string): Promise<PedidoDetalheDto> {
+    const pedido = await this.dataSource.getRepository(Pedido).findOne({
+      where: { id, cliente: { id: user.id } },
+      relations: {
+        endereco: true,
+        conjuntos: {
+          tecido: true,
+          pecaCima: { modelo: true, adereco: { adereco: true } },
+          pecaBaixo: { modelo: true, adereco: { adereco: true } },
+        },
+        historico: true,
+      },
+    });
+    if (!pedido) throw new NotFoundException('Pedido não encontrado');
+
+    const mapPeca = (peca: Peca) => ({
+      id: peca.id,
+      id_modelo: peca.modelo.id,
+      modelo: peca.modelo.nome,
+      parte: peca.modelo.parte,
+      tamanho: peca.tamanho,
+      aderecos: peca.adereco.map((aplicacao) => ({
+        id_adereco: aplicacao.adereco.id,
+        nome: aplicacao.adereco.nome,
+        coordenada_x: Number(aplicacao.coordenadaX),
+        coordenada_y: Number(aplicacao.coordenadaY),
+      })),
+    });
+
+    return {
+      id: pedido.id,
+      num_pedido: pedido.numPedido,
+      status: pedido.status,
+      data_pedido: pedido.dataPedido,
+      data_entrega_prevista: pedido.dataEntregaPrevista,
+      preco_final: pedido.precoFinal,
+      preco_frete: pedido.precoFrete,
+      modalidade_frete: pedido.modalidadeFrete,
+      prazo_frete_dias: pedido.prazoFreteDias,
+      valor_parcela_1: pedido.valorParcela1,
+      valor_parcela_2: pedido.valorParcela2,
+      motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
+      endereco: {
+        rua: pedido.endereco.rua,
+        numero: pedido.endereco.numero,
+        complemento: pedido.endereco.complemento,
+        bairro: pedido.endereco.bairro,
+        cidade: pedido.endereco.cidade,
+        estado: pedido.endereco.estado,
+        cep: pedido.endereco.cep,
+      },
+      conjuntos: pedido.conjuntos.map((conjunto) => ({
+        id: conjunto.id,
+        id_tecido: conjunto.tecido.id,
+        tecido: conjunto.tecido.nome,
+        preco: conjunto.preco,
+        observacao: conjunto.observacao,
+        foto_cliente: conjunto.fotoCliente,
+        cima: mapPeca(conjunto.pecaCima),
+        baixo: mapPeca(conjunto.pecaBaixo),
+      })),
+      historico: pedido.historico
+        .sort((a, b) => a.dataMudanca.getTime() - b.dataMudanca.getTime())
+        .map((item) => ({
+          status: item.status,
+          data_mudanca: item.dataMudanca,
+          motivo: item.motivo,
+        })),
+    };
+  }
 
   async create(user: Usuario, corpo: unknown): Promise<PedidoCriado> {
     const pedido = validarCriarPedido(corpo);

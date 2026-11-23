@@ -1,10 +1,10 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import {
-  ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiProduces, ApiResponse, ApiTags,
+  ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiParam, ApiProduces, ApiResponse, ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser, JwtAuthGuard } from '../auth/auth.guards.js';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
-import { CriarPedidoDto, PedidoCriadoDto } from './pedidos.dto.js';
+import { CriarPedidoDto, PedidoCriadoDto, PedidoDetalheDto, PedidoListaDto } from './pedidos.dto.js';
 import { PedidosService } from './pedidos.service.js';
 
 @ApiTags('pedidos')
@@ -15,6 +15,20 @@ import { PedidosService } from './pedidos.service.js';
 @ApiResponse({ status: 401, description: 'Não autenticado' })
 export class PedidosController {
   constructor(private readonly service: PedidosService) {}
+
+  @Get()
+  @ApiOkResponse({ type: PedidoListaDto, isArray: true })
+  listar(@CurrentUser() user: Usuario) {
+    return this.service.listar(user);
+  }
+
+  @Get(':id')
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: PedidoDetalheDto })
+  @ApiResponse({ status: 404, description: 'Pedido não encontrado ou não pertence ao cliente autenticado' })
+  obterDetalhe(@CurrentUser() user: Usuario, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.obterDetalhe(user, id);
+  }
 
   @Post()
   @ApiBody({ type: CriarPedidoDto })
