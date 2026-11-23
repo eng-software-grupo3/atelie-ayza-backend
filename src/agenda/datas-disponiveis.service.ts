@@ -15,7 +15,7 @@ const MAX_PRAZO_FRETE_DIAS = 60;
 export type DatasDisponiveis = {
   mes: string;
   data_minima: string;
-  dias: Array<{ data: string; disponivel: boolean }>;
+  dias: Array<{ data: string; disponivel: boolean; bloqueada: boolean }>;
 };
 
 // Disponibilidade das datas de entrega para o cliente (RF-08): só diz se cada dia pode
@@ -49,10 +49,10 @@ export class DatasDisponiveisService {
         (b) => b.data,
       ),
     );
-
     const dias = Array.from({ length: total }, (_, i) => {
       const data = `${mes}-${String(i + 1).padStart(2, '0')}`;
-      return { data, disponivel: data >= dataMinima && !bloqueadas.has(data) };
+      const bloqueada = bloqueadas.has(data);
+      return { data, disponivel: data >= dataMinima && !bloqueada, bloqueada };
     });
     return { mes, data_minima: dataMinima, dias };
   }
