@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ParteModelo } from '../catalogo/entities/modelo.entity.js';
 import { ModalidadeFrete, StatusPedido, Tamanho } from './entities/enums.js';
 
 export class AderecoAplicadoDto {
@@ -130,7 +131,7 @@ export class PecaDetalhePedidoDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) id_modelo!: string;
   @ApiProperty() modelo!: string;
-  @ApiProperty({ enum: ['CIMA', 'BAIXO'] }) parte!: string;
+  @ApiProperty({ enum: ParteModelo }) parte!: ParteModelo;
   @ApiProperty({ enum: Tamanho }) tamanho!: Tamanho;
   @ApiProperty({ type: AderecoDetalhePedidoDto, isArray: true }) aderecos!: AderecoDetalhePedidoDto[];
 }

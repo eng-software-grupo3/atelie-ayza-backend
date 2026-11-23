@@ -28,6 +28,7 @@ import {
   type EnderecoValidado,
   type PedidoValidado,
 } from './pedido-validacao.js';
+import type { PedidoDetalheDto, PedidoListaDto } from './pedidos.dto.js';
 import { calcularPrecoPedido, type ConjuntoParaPreco, type PrecoPedido } from './preco-pedido.js';
 
 type Catalogo = {
@@ -152,7 +153,7 @@ export class PedidosService {
         cima: mapPeca(conjunto.pecaCima),
         baixo: mapPeca(conjunto.pecaBaixo),
       })),
-      historico: pedido.historico
+      historico: [...pedido.historico]
         .sort((a, b) => a.dataMudanca.getTime() - b.dataMudanca.getTime())
         .map((item) => ({
           status: item.status,

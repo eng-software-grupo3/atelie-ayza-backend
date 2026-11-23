@@ -6,7 +6,7 @@ const cliente = { id: 'cliente-1' };
 
 function serviceWithRepository(repository: { find: ReturnType<typeof vi.fn>; findOne: ReturnType<typeof vi.fn> }) {
   const dataSource = { getRepository: vi.fn(() => repository) };
-  return { service: new PedidosService(dataSource as never, {} as never, {} as never), dataSource };
+  return { service: new PedidosService(dataSource as never, {} as never, {} as never, {} as never), dataSource };
 }
 
 describe('PedidosService consultas do cliente', () => {
