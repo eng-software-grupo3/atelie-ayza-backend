@@ -12,7 +12,6 @@ import {
 import { AdminGuard, JwtAuthGuard } from '../auth/auth.guards.js';
 import { StatusPedido } from './entities/enums.js';
 import {
-  AceitarPedidoDto,
   PedidoGestaoDetalheDto,
   PedidoGestaoPaginaDto,
   PedidoAcaoDto,
@@ -56,13 +55,11 @@ export class PedidosAdminController {
 
   @Patch(':id/aceitar')
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiBody({ type: AceitarPedidoDto })
   @ApiOkResponse({ type: PedidoAcaoDto })
-  @ApiResponse({ status: 400, description: 'Dados financeiros inválidos' })
   @ApiResponse({ status: 404, description: 'Pedido não encontrado' })
   @ApiResponse({ status: 409, description: 'Transição inválida ou item do pedido inexistente no catálogo' })
-  aceitar(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: AceitarPedidoDto) {
-    return this.service.aceitarPedido(id, body);
+  aceitar(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.aceitarPedido(id);
   }
 
   @Patch(':id/recusar')

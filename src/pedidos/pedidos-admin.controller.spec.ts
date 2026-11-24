@@ -34,13 +34,12 @@ describe('PedidosAdminController', () => {
     expect(service.obterDetalheGestao).toHaveBeenCalledWith('pedido-1');
   });
 
-  it('delega o aceite com dados financeiros', async () => {
-    const body = { preco_final: 100, valor_parcela_1: 60, valor_parcela_2: 40 };
+  it('delega o aceite sem dados financeiros', async () => {
     const acao = { id: 'pedido-1', status: 'esperando_1_pag' };
     service.aceitarPedido.mockResolvedValue(acao);
 
-    await expect(controller.aceitar('pedido-1', body)).resolves.toBe(acao);
-    expect(service.aceitarPedido).toHaveBeenCalledWith('pedido-1', body);
+    await expect(controller.aceitar('pedido-1')).resolves.toBe(acao);
+    expect(service.aceitarPedido).toHaveBeenCalledWith('pedido-1');
   });
 
   it('delega a recusa com motivo', async () => {

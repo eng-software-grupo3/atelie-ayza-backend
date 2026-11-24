@@ -30,7 +30,6 @@ import {
   type PedidoValidado,
 } from './pedido-validacao.js';
 import type {
-  AceitarPedidoDto,
   PedidoAcaoDto,
   PedidoDetalheDto,
   PedidoGestaoDetalheDto,
@@ -64,7 +63,7 @@ export type PedidoCriado = {
   modalidade_frete: ModalidadeFrete;
   preco_frete: number;
   prazo_frete_dias: number;
-  preco_final: number;
+  preco_final: number | null;
   conjuntos: Array<{ id: string; preco: number }>;
 };
 
@@ -337,14 +336,7 @@ export class PedidosService {
     };
   }
 
-  async aceitarPedido(id: string, corpo: AceitarPedidoDto): Promise<PedidoAcaoDto> {
-    const precoFinal = this.valorFinanceiro(corpo?.preco_final, 'preco_final');
-    const parcela1 = this.valorFinanceiro(corpo?.valor_parcela_1, 'valor_parcela_1');
-    const parcela2 = this.valorFinanceiro(corpo?.valor_parcela_2, 'valor_parcela_2');
-    if (this.cents(precoFinal) !== this.cents(parcela1) + this.cents(parcela2)) {
-      throw new BadRequestException('A soma das parcelas deve ser igual ao preco_final');
-    }
-
+  async aceitarPedido(id: string): Promise<PedidoAcaoDto> {
     return this.dataSource.transaction(async (manager) => {
       const pedidoBloqueado = await manager.findOne(Pedido, {
         where: { id },
@@ -370,9 +362,16 @@ export class PedidosService {
         throw conflito('transicao_invalida', 'Só pedidos em análise podem ser aceitos');
       }
       await this.estoque.baixarPedido(manager, pedido);
+      const precoFinalCentavos = pedido.conjuntos.reduce(
+        (centavos, conjunto) => centavos + this.cents(conjunto.preco),
+        this.cents(pedido.precoFrete),
+      );
+      const parcela1Centavos = Math.floor(precoFinalCentavos / 2);
+      const parcela2Centavos = precoFinalCentavos - parcela1Centavos;
+      const precoFinal = precoFinalCentavos / 100;
       pedido.precoFinal = precoFinal;
-      pedido.valorParcela1 = parcela1;
-      pedido.valorParcela2 = parcela2;
+      pedido.valorParcela1 = parcela1Centavos / 100;
+      pedido.valorParcela2 = parcela2Centavos / 100;
       pedido.status = StatusPedido.ESPERANDO_1_PAG;
       await manager.save(Pedido, pedido);
       await manager.save(HistoricoStatus, {
@@ -426,21 +425,6 @@ export class PedidosService {
         motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
       };
     });
-  }
-
-  private valorFinanceiro(valor: unknown, campo: string): number {
-    if (typeof valor !== 'string' && typeof valor !== 'number') {
-      throw new BadRequestException(`${campo} inválido`);
-    }
-    const texto = String(valor).trim();
-    if (!/^[0-9]{1,8}(?:\.[0-9]{1,2})?$/.test(texto)) {
-      throw new BadRequestException(`${campo} inválido`);
-    }
-    const numero = Number(texto);
-    if (!Number.isFinite(numero) || numero > 99_999_999.99) {
-      throw new BadRequestException(`${campo} inválido`);
-    }
-    return numero;
   }
 
   private cents(valor: number): number {
@@ -612,7 +596,7 @@ export class PedidosService {
       dataEntregaPrevista: pedido.dataEntregaPrevista,
       telefone: pedido.telefone,
       precoEstimado: precos.total,
-      precoFinal: precos.total,
+      precoFinal: null,
       modalidadeFrete: pedido.modalidadeFrete,
       precoFrete: cotacao.preco,
       prazoFreteDias: cotacao.prazo_frete_dias,
@@ -673,7 +657,7 @@ export class PedidosService {
       modalidade_frete: pedido.modalidadeFrete,
       preco_frete: cotacao.preco,
       prazo_frete_dias: cotacao.prazo_frete_dias,
-      preco_final: precos.total,
+      preco_final: null,
       conjuntos,
     };
   }

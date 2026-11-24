@@ -352,28 +352,6 @@ describe('PedidosService consultas do cliente', () => {
     expect(saved).toContainEqual(expect.objectContaining({ status: 'recusado', motivoRecusaCancelamento: 'Fora do prazo' }));
   });
 
-  it('exige parcela cuja soma seja igual ao preco final', async () => {
-    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
-    const { service } = serviceWithRepository(repository);
-
-    await expect(service.aceitarPedido('pedido-1', {
-      preco_final: 100,
-      valor_parcela_1: 40,
-      valor_parcela_2: 40,
-    })).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejeita preco final ou parcelas negativas', async () => {
-    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
-    const { service } = serviceWithRepository(repository);
-
-    await expect(service.aceitarPedido('pedido-1', {
-      preco_final: -100,
-      valor_parcela_1: -50,
-      valor_parcela_2: -50,
-    })).rejects.toBeInstanceOf(BadRequestException);
-  });
-
   it('aceita apenas pedido em analise e bloqueia transicoes invalidas', async () => {
     const pedido = {
       id: 'pedido-1',
@@ -392,15 +370,12 @@ describe('PedidosService consultas do cliente', () => {
     const estoque = { baixarPedido: vi.fn() };
     const { service } = serviceWithRepository(repository, { manager, estoque });
 
-    await expect(service.aceitarPedido('pedido-1', {
-      preco_final: 100,
-      valor_parcela_1: 60,
-      valor_parcela_2: 40,
-    })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.aceitarPedido('pedido-1'))
+      .rejects.toBeInstanceOf(ConflictException);
     expect(estoque.baixarPedido).not.toHaveBeenCalled();
   });
 
-  it('aceita pedido em analise, atualiza valores e registra o historico', async () => {
+  it('aceita pedido em analise, calcula o valor final e registra o historico', async () => {
     const pedido = {
       id: 'pedido-1',
       status: 'em_analise',
@@ -408,7 +383,8 @@ describe('PedidosService consultas do cliente', () => {
       valorParcela1: null,
       valorParcela2: null,
       motivoRecusaCancelamento: null,
-      conjuntos: [],
+      precoFrete: 10,
+      conjuntos: [{ preco: 60.01 }, { preco: 40 }],
     };
     const saved: Array<{ entidade: unknown; dados: unknown }> = [];
     const manager = {
@@ -425,24 +401,20 @@ describe('PedidosService consultas do cliente', () => {
     const estoque = { baixarPedido: vi.fn().mockResolvedValue(undefined) };
     const { service } = serviceWithRepository(repository, { manager, estoque });
 
-    await expect(service.aceitarPedido('pedido-1', {
-      preco_final: 100,
-      valor_parcela_1: 60,
-      valor_parcela_2: 40,
-    })).resolves.toMatchObject({
+    await expect(service.aceitarPedido('pedido-1')).resolves.toMatchObject({
       id: 'pedido-1',
       status: 'esperando_1_pag',
-      preco_final: 100,
-      valor_parcela_1: 60,
-      valor_parcela_2: 40,
+      preco_final: 110.01,
+      valor_parcela_1: 55,
+      valor_parcela_2: 55.01,
     });
     expect(estoque.baixarPedido).toHaveBeenCalledTimes(1);
     expect(saved).toContainEqual(expect.objectContaining({
       dados: expect.objectContaining({
         status: 'esperando_1_pag',
-        precoFinal: 100,
-        valorParcela1: 60,
-        valorParcela2: 40,
+        precoFinal: 110.01,
+        valorParcela1: 55,
+        valorParcela2: 55.01,
       }),
     }));
   });
@@ -476,11 +448,8 @@ describe('PedidosService consultas do cliente', () => {
       estoque as never,
     );
 
-    await expect(service.aceitarPedido('pedido-1', {
-      preco_final: 100,
-      valor_parcela_1: 60,
-      valor_parcela_2: 40,
-    })).rejects.toThrow('falha no estoque');
+    await expect(service.aceitarPedido('pedido-1'))
+      .rejects.toThrow('falha no estoque');
     expect(manager.save).not.toHaveBeenCalled();
   });
 });

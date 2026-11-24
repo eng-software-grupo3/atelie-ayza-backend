@@ -150,7 +150,7 @@ describe('PedidosService.create', () => {
       modalidade_frete: 'padrao',
       preco_frete: 29.67,
       prazo_frete_dias: 7,
-      preco_final: 139.67,
+      preco_final: null,
       conjuntos: [{ id: expect.any(String), preco: 110 }],
     });
     expect(frete.cotar).toHaveBeenCalledWith({
@@ -167,7 +167,7 @@ describe('PedidosService.create', () => {
       status: 'em_analise',
       telefone: '83999990000',
       precoEstimado: 139.67,
-      precoFinal: 139.67,
+      precoFinal: null,
       precoFrete: 29.67,
       prazoFreteDias: 7,
       modalidadeFrete: 'padrao',
@@ -253,7 +253,7 @@ describe('PedidosService.create', () => {
   it('ignora preços enviados pelo cliente', async () => {
     const { service, salvos } = setup();
     await criar(service, { ...corpo(), preco_final: 1, preco_frete: 0 });
-    expect(salvos[1].dados).toMatchObject({ precoFinal: 139.67, precoFrete: 29.67 });
+    expect(salvos[1].dados).toMatchObject({ precoFinal: null, precoFrete: 29.67 });
   });
 
   it('calcula a data mínima com a confecção (3 dias) mais o prazo do frete', async () => {

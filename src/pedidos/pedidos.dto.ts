@@ -240,15 +240,6 @@ export class PedidoGestaoDetalheDto extends PedidoGestaoListaDto {
   @ApiProperty({ type: String, nullable: true }) motivo_recusa_cancelamento!: string | null;
 }
 
-export class AceitarPedidoDto {
-  @ApiProperty({ type: Number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01, example: 139.67, description: 'Preço final não negativo' })
-  preco_final!: number;
-  @ApiProperty({ type: Number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01, example: 70, description: 'Primeira parcela não negativa' })
-  valor_parcela_1!: number;
-  @ApiProperty({ type: Number, minimum: 0, maximum: 99999999.99, multipleOf: 0.01, example: 69.67, description: 'Segunda parcela não negativa' })
-  valor_parcela_2!: number;
-}
-
 export class RecusarPedidoDto {
   @ApiProperty({ type: String, minLength: 1, maxLength: 500 })
   motivo!: string;
