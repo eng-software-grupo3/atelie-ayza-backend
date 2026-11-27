@@ -1,10 +1,14 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { PedidosService } from './pedidos.service.js';
 
 const cliente = { id: 'cliente-1' };
 
-function serviceWithRepository(repository: { find: ReturnType<typeof vi.fn>; findOne: ReturnType<typeof vi.fn> }) {
+function serviceWithRepository(repository: {
+  find: ReturnType<typeof vi.fn>;
+  findOne: ReturnType<typeof vi.fn>;
+  findAndCount?: ReturnType<typeof vi.fn>;
+}) {
   const dataSource = { getRepository: vi.fn(() => repository) };
   return { service: new PedidosService(dataSource as never, {} as never, {} as never, {} as never), dataSource };
 }
@@ -108,5 +112,198 @@ describe('PedidosService consultas do cliente', () => {
     expect(repository.findOne).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'pedido-de-outra-cliente', cliente: { id: cliente.id } },
     }));
+  });
+
+  it('lista pedidos da gestao com filtro de status e paginacao', async () => {
+    const pedido = {
+      id: 'pedido-1',
+      numPedido: 42,
+      status: 'em_analise',
+      dataPedido: new Date('2026-11-20T12:00:00.000Z'),
+      dataEntregaPrevista: '2026-12-01',
+      precoEstimado: 100,
+      precoFinal: null,
+      cliente: {
+        id: 'cliente-1',
+        nome: 'Ana',
+        email: 'ana@example.com',
+        fotoUrl: null,
+      },
+    };
+    const repository = {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      findAndCount: vi.fn().mockResolvedValue([[pedido], 1]),
+    };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.listarGestao('em_analise', '2', '5', 'desc')).resolves.toMatchObject({
+      dados: [{
+        id: 'pedido-1',
+        num_pedido: 42,
+        status: 'em_analise',
+        cliente: { nome: 'Ana', email: 'ana@example.com' },
+      }],
+      pagina: 2,
+      limite: 5,
+      total: 1,
+      total_paginas: 1,
+    });
+    expect(repository.findAndCount).toHaveBeenCalledWith({
+      where: { status: 'em_analise' },
+      relations: { cliente: true },
+      order: { dataPedido: 'DESC', numPedido: 'DESC' },
+      skip: 5,
+      take: 5,
+    });
+  });
+
+  it('rejeita status, pagina, limite e ordem invalidos na gestao', async () => {
+    const repository = { find: vi.fn(), findOne: vi.fn(), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.listarGestao('inventado', 1, 10, 'desc')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(service.listarGestao('todos', 0, 10, 'desc')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(service.listarGestao('todos', 1, 101, 'desc')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(service.listarGestao('todos', 1, 10, 'horizontal')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('retorna estado vazio sem itens na gestao', async () => {
+    const repository = {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      findAndCount: vi.fn().mockResolvedValue([[], 0]),
+    };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.listarGestao('todos', 1, 10, 'desc')).resolves.toEqual({
+      dados: [],
+      pagina: 1,
+      limite: 10,
+      total: 0,
+      total_paginas: 0,
+    });
+  });
+
+  it('retorna 404 ao consultar detalhe administrativo inexistente', async () => {
+    const repository = { find: vi.fn(), findOne: vi.fn().mockResolvedValue(null), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.obterDetalheGestao('pedido-inexistente'))
+      .rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('mapeia o detalhe administrativo completo, incluindo aderecos e historico', async () => {
+    const antiga = new Date('2026-11-19T12:00:00.000Z');
+    const atual = new Date('2026-11-20T12:00:00.000Z');
+    const pedido = {
+      id: 'pedido-1',
+      numPedido: 42,
+      status: 'em_producao',
+      dataPedido: atual,
+      dataEntregaPrevista: '2026-12-01',
+      precoEstimado: 100,
+      precoFinal: 120,
+      precoFrete: 20,
+      modalidadeFrete: 'sedex',
+      prazoFreteDias: 3,
+      telefone: '83999990000',
+      motivoRecusaCancelamento: null,
+      cliente: {
+        id: 'cliente-1',
+        nome: 'Ana',
+        email: 'ana@example.com',
+        fotoUrl: 'https://example.com/ana.jpg',
+      },
+      endereco: {
+        rua: 'Rua A',
+        numero: '10',
+        complemento: null,
+        bairro: 'Centro',
+        cidade: 'Campina Grande',
+        estado: 'PB',
+        cep: '58400000',
+      },
+      conjuntos: [{
+        id: 'conjunto-1',
+        tecido: {
+          id: 'tecido-1',
+          nome: 'Algodao',
+          foto: 'https://example.com/tecido.jpg',
+          larguraCm: 140,
+        },
+        preco: 100,
+        observacao: 'Ajustar manga',
+        fotoCliente: null,
+        pecaCima: {
+          id: 'peca-1',
+          tamanho: 'M',
+          modelo: {
+            id: 'modelo-1',
+            nome: 'Blusa',
+            parte: 'CIMA',
+            svgUrl: 'https://example.com/blusa.svg',
+          },
+          adereco: [{
+            adereco: {
+              id: 'adereco-1',
+              nome: 'Laco',
+              foto: 'https://example.com/laco.jpg',
+            },
+            coordenadaX: '0.2500',
+            coordenadaY: '0.5000',
+          }],
+        },
+        pecaBaixo: {
+          id: 'peca-2',
+          tamanho: 'P',
+          modelo: {
+            id: 'modelo-2',
+            nome: 'Saia',
+            parte: 'BAIXO',
+            svgUrl: 'https://example.com/saia.svg',
+          },
+          adereco: [],
+        },
+      }],
+      historico: [
+        { status: 'em_producao', dataMudanca: atual, motivo: null },
+        { status: 'em_analise', dataMudanca: antiga, motivo: null },
+      ],
+    };
+    const repository = { find: vi.fn(), findOne: vi.fn().mockResolvedValue(pedido), findAndCount: vi.fn() };
+    const { service } = serviceWithRepository(repository);
+
+    await expect(service.obterDetalheGestao('pedido-1')).resolves.toMatchObject({
+      telefone: '83999990000',
+      cliente: { nome: 'Ana', email: 'ana@example.com' },
+      endereco: { rua: 'Rua A', cep: '58400000' },
+      frete: { modalidade: 'sedex', preco: 20, prazo_dias: 3 },
+      conjuntos: [{
+        tecido: { nome: 'Algodao', largura_cm: 140 },
+        cima: {
+          modelo: { nome: 'Blusa', parte: 'CIMA' },
+          aderecos: [{
+            nome: 'Laco',
+            foto: 'https://example.com/laco.jpg',
+            coordenada_x: 0.25,
+            coordenada_y: 0.5,
+          }],
+        },
+        baixo: { modelo: { nome: 'Saia', parte: 'BAIXO' }, aderecos: [] },
+      }],
+      historico: [
+        { status: 'em_analise', data_mudanca: antiga },
+        { status: 'em_producao', data_mudanca: atual },
+      ],
+    });
   });
 });
