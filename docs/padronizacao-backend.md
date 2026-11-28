@@ -66,7 +66,7 @@ Todas as FKs usam `onDelete: 'RESTRICT'`.
 - Adereço aplicado: **uma linha em `adereco_peca` por unidade**, com coordenadas em **proporção da imagem (0 a 1)**. A quantidade é a contagem de linhas.
 - `num_pedido` é sequencial e único (o que a cliente cita no WhatsApp); o `id` é UUID.
 - Mudança de status grava uma linha em `historico_status`; mudança de estoque grava em `movimentacao_estoque` (exatamente um entre tecido e adereço).
-- `preco_final` e parcelas são nulos até o aceite (RF-06).
+- `preco_final` fica nulo até o aceite e passa a ser calculado automaticamente pela soma dos conjuntos e do frete; as duas parcelas são calculadas como metades, com eventual centavo restante atribuído à segunda parcela (RF-06).
 - E-mail da admin vem de `ADMIN_EMAIL` (variável de ambiente), nunca no repositório. O `npm run seed` cria a admin com esse e-mail.
 - Prazo de confecção é fixo (3 dias), vindo de `PRAZO_CONFECCAO_DIAS` (variável de ambiente). Frete e demais prazos são separados. A data mínima de entrega no RF-08 = hoje + `PRAZO_CONFECCAO_DIAS` + `prazo_frete_dias`, respeitando as datas bloqueadas na agenda.
 

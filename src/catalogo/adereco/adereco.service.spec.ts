@@ -71,6 +71,7 @@ describe('AderecoService', () => {
     await service.create({ nome: 'A', preco: '1', quantidade: '1' }, file());
     const row = rows[0];
     expect((await service.updateQuantity(row.id, { quantidade: '7' })).quantidade).toBe(7);
+    expect((await service.updateQuantity(row.id, { quantidade: '-2' })).quantidade).toBe(-2);
     expect((await service.updateDisabled(row.id, { desabilitado: true })).desabilitado).toBe(true);
     await expect(service.updateQuantity(row.id, { quantidade: '1.5' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.updateDisabled(row.id, { desabilitado: 'false' })).rejects.toBeInstanceOf(BadRequestException);

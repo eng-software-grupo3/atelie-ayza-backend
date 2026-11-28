@@ -15,6 +15,7 @@ import { Modelo, ParteModelo } from '../catalogo/entities/modelo.entity.js';
 import { Tecido } from '../catalogo/entities/tecido.entity.js';
 import { CepService } from '../cep/cep.service.js';
 import { FreteService, type CotacaoFrete } from '../frete/frete.service.js';
+import { EstoqueService } from '../estoque/estoque.service.js';
 import { Endereco } from '../pessoas/entities/endereco.entity.js';
 import { Usuario } from '../pessoas/entities/usuario.entity.js';
 import { AderecoPeca } from './entities/adereco-peca.entity.js';
@@ -28,7 +29,14 @@ import {
   type EnderecoValidado,
   type PedidoValidado,
 } from './pedido-validacao.js';
-import type { PedidoDetalheDto, PedidoListaDto } from './pedidos.dto.js';
+import type {
+  PedidoAcaoDto,
+  PedidoDetalheDto,
+  PedidoGestaoDetalheDto,
+  PedidoGestaoPaginaDto,
+  PedidoListaDto,
+  RecusarPedidoDto,
+} from './pedidos.dto.js';
 import { calcularPrecoPedido, type ConjuntoParaPreco, type PrecoPedido } from './preco-pedido.js';
 
 type Catalogo = {
@@ -55,7 +63,7 @@ export type PedidoCriado = {
   modalidade_frete: ModalidadeFrete;
   preco_frete: number;
   prazo_frete_dias: number;
-  preco_final: number;
+  preco_final: number | null;
   conjuntos: Array<{ id: string; preco: number }>;
 };
 
@@ -70,7 +78,172 @@ export class PedidosService {
     private readonly frete: FreteService,
     private readonly config: ConfigService,
     private readonly cep: CepService,
+    private readonly estoque: EstoqueService,
   ) {}
+
+  async listarGestao(
+    statusInformado?: unknown,
+    paginaInformada?: unknown,
+    limiteInformado?: unknown,
+    ordemInformada?: unknown,
+  ): Promise<PedidoGestaoPaginaDto> {
+    const pagina = this.paginaGestao(paginaInformada);
+    const limite = this.limiteGestao(limiteInformado);
+    const ordem = this.ordemGestao(ordemInformada);
+
+    let status: StatusPedido | undefined;
+    if (statusInformado !== undefined && statusInformado !== null && statusInformado !== '') {
+      const valor = String(statusInformado).toLowerCase();
+      if (valor !== 'todos') {
+        if (!Object.values(StatusPedido).includes(valor as StatusPedido)) {
+          throw new BadRequestException('status inválido');
+        }
+        status = valor as StatusPedido;
+      }
+    }
+
+    const [pedidos, total] = await this.dataSource.getRepository(Pedido).findAndCount({
+      where: status ? { status } : {},
+      relations: { cliente: true },
+      order: { dataPedido: ordem, numPedido: ordem },
+      skip: (pagina - 1) * limite,
+      take: limite,
+    });
+
+    return {
+      dados: pedidos.map((pedido) => ({
+        id: pedido.id,
+        num_pedido: pedido.numPedido,
+        status: pedido.status,
+        data_pedido: pedido.dataPedido,
+        data_entrega_prevista: pedido.dataEntregaPrevista,
+        preco_estimado: pedido.precoEstimado,
+        preco_final: pedido.precoFinal,
+        cliente: {
+          id: pedido.cliente.id,
+          nome: pedido.cliente.nome,
+          email: pedido.cliente.email,
+          foto_url: pedido.cliente.fotoUrl,
+        },
+      })),
+      pagina,
+      limite,
+      total,
+      total_paginas: Math.ceil(total / limite),
+    };
+  }
+
+  async obterDetalheGestao(id: string): Promise<PedidoGestaoDetalheDto> {
+    const pedido = await this.dataSource.getRepository(Pedido).findOne({
+      where: { id },
+      relations: {
+        cliente: true,
+        endereco: true,
+        conjuntos: {
+          tecido: true,
+          pecaCima: { modelo: true, adereco: { adereco: true } },
+          pecaBaixo: { modelo: true, adereco: { adereco: true } },
+        },
+        historico: true,
+      },
+    });
+    if (!pedido) throw new NotFoundException('Pedido não encontrado');
+
+    const mapPeca = (peca: Peca) => ({
+      id: peca.id,
+      tamanho: peca.tamanho,
+      modelo: {
+        id: peca.modelo.id,
+        nome: peca.modelo.nome,
+        parte: peca.modelo.parte,
+        svg_url: peca.modelo.svgUrl,
+      },
+      aderecos: peca.adereco.map((aplicacao) => ({
+        id_adereco: aplicacao.adereco.id,
+        nome: aplicacao.adereco.nome,
+        foto: aplicacao.adereco.foto,
+        coordenada_x: Number(aplicacao.coordenadaX),
+        coordenada_y: Number(aplicacao.coordenadaY),
+      })),
+    });
+
+    return {
+      id: pedido.id,
+      num_pedido: pedido.numPedido,
+      status: pedido.status,
+      data_pedido: pedido.dataPedido,
+      data_entrega_prevista: pedido.dataEntregaPrevista,
+      preco_estimado: pedido.precoEstimado,
+      preco_final: pedido.precoFinal,
+      cliente: {
+        id: pedido.cliente.id,
+        nome: pedido.cliente.nome,
+        email: pedido.cliente.email,
+        foto_url: pedido.cliente.fotoUrl,
+      },
+      telefone: pedido.telefone,
+      endereco: {
+        rua: pedido.endereco.rua,
+        numero: pedido.endereco.numero,
+        complemento: pedido.endereco.complemento,
+        bairro: pedido.endereco.bairro,
+        cidade: pedido.endereco.cidade,
+        estado: pedido.endereco.estado,
+        cep: pedido.endereco.cep,
+      },
+      frete: {
+        modalidade: pedido.modalidadeFrete,
+        preco: pedido.precoFrete,
+        prazo_dias: pedido.prazoFreteDias,
+      },
+      motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
+      conjuntos: pedido.conjuntos.map((conjunto) => ({
+        id: conjunto.id,
+        tecido: {
+          id: conjunto.tecido.id,
+          nome: conjunto.tecido.nome,
+          foto: conjunto.tecido.foto,
+          largura_cm: conjunto.tecido.larguraCm,
+        },
+        preco: conjunto.preco,
+        observacao: conjunto.observacao,
+        foto_cliente: conjunto.fotoCliente,
+        cima: mapPeca(conjunto.pecaCima),
+        baixo: mapPeca(conjunto.pecaBaixo),
+      })),
+      historico: [...pedido.historico]
+        .sort((a, b) => a.dataMudanca.getTime() - b.dataMudanca.getTime())
+        .map((item) => ({
+          status: item.status,
+          data_mudanca: item.dataMudanca,
+          motivo: item.motivo,
+        })),
+    };
+  }
+
+  private paginaGestao(valor?: unknown): number {
+    const pagina = valor === undefined || valor === '' ? 1 : Number(valor);
+    if (!Number.isInteger(pagina) || pagina < 1) {
+      throw new BadRequestException('pagina inválida');
+    }
+    return pagina;
+  }
+
+  private limiteGestao(valor?: unknown): number {
+    const limite = valor === undefined || valor === '' ? 10 : Number(valor);
+    if (!Number.isInteger(limite) || limite < 1 || limite > 100) {
+      throw new BadRequestException('limite inválido');
+    }
+    return limite;
+  }
+
+  private ordemGestao(valor?: unknown): 'ASC' | 'DESC' {
+    if (valor === undefined || valor === '') return 'DESC';
+    const ordem = String(valor).toLowerCase();
+    if (ordem === 'asc') return 'ASC';
+    if (ordem === 'desc') return 'DESC';
+    throw new BadRequestException('ordem inválida');
+  }
 
   async listar(user: Usuario): Promise<PedidoListaDto[]> {
     const pedidos = await this.dataSource.getRepository(Pedido).find({
@@ -161,6 +334,101 @@ export class PedidosService {
           motivo: item.motivo,
         })),
     };
+  }
+
+  async aceitarPedido(id: string): Promise<PedidoAcaoDto> {
+    return this.dataSource.transaction(async (manager) => {
+      const pedidoBloqueado = await manager.findOne(Pedido, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!pedidoBloqueado) throw new NotFoundException('Pedido não encontrado');
+      if (pedidoBloqueado.status !== StatusPedido.EM_ANALISE) {
+        throw conflito('transicao_invalida', 'Só pedidos em análise podem ser aceitos');
+      }
+
+      const pedido = await manager.findOne(Pedido, {
+        where: { id },
+        relations: {
+          conjuntos: {
+            tecido: true,
+            pecaCima: { modelo: true, adereco: { adereco: true } },
+            pecaBaixo: { modelo: true, adereco: { adereco: true } },
+          },
+        },
+      });
+      if (!pedido) throw new NotFoundException('Pedido não encontrado');
+      if (pedido.status !== StatusPedido.EM_ANALISE) {
+        throw conflito('transicao_invalida', 'Só pedidos em análise podem ser aceitos');
+      }
+      await this.estoque.baixarPedido(manager, pedido);
+      const precoFinalCentavos = pedido.conjuntos.reduce(
+        (centavos, conjunto) => centavos + this.cents(conjunto.preco),
+        this.cents(pedido.precoFrete),
+      );
+      const parcela1Centavos = Math.floor(precoFinalCentavos / 2);
+      const parcela2Centavos = precoFinalCentavos - parcela1Centavos;
+      const precoFinal = precoFinalCentavos / 100;
+      pedido.precoFinal = precoFinal;
+      pedido.valorParcela1 = parcela1Centavos / 100;
+      pedido.valorParcela2 = parcela2Centavos / 100;
+      pedido.status = StatusPedido.ESPERANDO_1_PAG;
+      await manager.save(Pedido, pedido);
+      await manager.save(HistoricoStatus, {
+        pedido,
+        status: StatusPedido.ESPERANDO_1_PAG,
+        motivo: null,
+      });
+
+      return {
+        id: pedido.id,
+        status: pedido.status,
+        preco_final: pedido.precoFinal,
+        valor_parcela_1: pedido.valorParcela1,
+        valor_parcela_2: pedido.valorParcela2,
+        motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
+      };
+    });
+  }
+
+  async recusarPedido(id: string, corpo: RecusarPedidoDto): Promise<PedidoAcaoDto> {
+    const motivo = typeof corpo?.motivo === 'string' ? corpo.motivo.trim() : '';
+    if (!motivo || motivo.length > 500) {
+      throw new BadRequestException('motivo obrigatório (máximo 500 caracteres)');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const pedido = await manager.findOne(Pedido, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!pedido) throw new NotFoundException('Pedido não encontrado');
+      if (pedido.status !== StatusPedido.EM_ANALISE) {
+        throw conflito('transicao_invalida', 'Só pedidos em análise podem ser recusados');
+      }
+
+      pedido.status = StatusPedido.RECUSADO;
+      pedido.motivoRecusaCancelamento = motivo;
+      await manager.save(Pedido, pedido);
+      await manager.save(HistoricoStatus, {
+        pedido,
+        status: StatusPedido.RECUSADO,
+        motivo,
+      });
+
+      return {
+        id: pedido.id,
+        status: pedido.status,
+        preco_final: pedido.precoFinal,
+        valor_parcela_1: pedido.valorParcela1,
+        valor_parcela_2: pedido.valorParcela2,
+        motivo_recusa_cancelamento: pedido.motivoRecusaCancelamento,
+      };
+    });
+  }
+
+  private cents(valor: number): number {
+    return Math.round(valor * 100);
   }
 
   async create(user: Usuario, corpo: unknown): Promise<PedidoCriado> {
@@ -328,7 +596,7 @@ export class PedidosService {
       dataEntregaPrevista: pedido.dataEntregaPrevista,
       telefone: pedido.telefone,
       precoEstimado: precos.total,
-      precoFinal: precos.total,
+      precoFinal: null,
       modalidadeFrete: pedido.modalidadeFrete,
       precoFrete: cotacao.preco,
       prazoFreteDias: cotacao.prazo_frete_dias,
@@ -389,7 +657,7 @@ export class PedidosService {
       modalidade_frete: pedido.modalidadeFrete,
       preco_frete: cotacao.preco,
       prazo_frete_dias: cotacao.prazo_frete_dias,
-      preco_final: precos.total,
+      preco_final: null,
       conjuntos,
     };
   }

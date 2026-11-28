@@ -81,12 +81,12 @@ function amount(value: unknown): number {
 function quantity(value: unknown): number {
   if (
     (typeof value !== 'string' && typeof value !== 'number') ||
-    !/^\d+$/.test(String(value))
+    !/^-[0-9]+$|^[0-9]+$/.test(String(value))
   ) {
     throw new BadRequestException('quantidade inválida');
   }
   const result = Number(value);
-  if (!Number.isSafeInteger(result) || result > 2147483647) {
+  if (!Number.isSafeInteger(result) || result > 2147483647 || result < -2147483648) {
     throw new BadRequestException('quantidade inválida');
   }
   return result;
